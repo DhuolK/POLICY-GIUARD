@@ -1,0 +1,200 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="flex flex-col gap-6">
+    <header class="flex justify-between items-end mb-4">
+        <div>
+            <h1 class="text-3xl font-display font-bold text-ink">Policies</h1>
+            <p class="text-muted mt-1">Manage all insurance policies</p>
+        </div>
+        
+        <div class="flex gap-4">
+            <a href="{{ url_for('policies.expiring') }}" class="magnetic-btn border border-divider text-ink hover:bg-surface px-6 py-2.5 rounded-full font-medium flex items-center gap-1.5 transition-all text-sm shadow-sm hover:shadow-md">
+                ⏰ Expiring Soon
+            </a>
+            <a href="{{ url_for('policies.new') }}" class="magnetic-btn bg-primary text-surface px-6 py-2.5 rounded-full font-medium shadow-sm hover:shadow-md transition-shadow">
+                + Add Issued Policy
+            </a>
+        </div>
+    </header>
+
+    <!-- Tab Navigation -->
+    <div class="border-b border-divider/50 flex gap-6 text-sm font-medium mb-2">
+        <button onclick="switchTab('issued')" id="tab-btn-issued" class="tab-btn pb-4 border-b-2 border-primary text-primary transition-all">Issued Policies ({{ policies|length }})</button>
+        <button onclick="switchTab('available')" id="tab-btn-available" class="tab-btn pb-4 border-b-2 border-transparent text-muted hover:text-ink transition-all">Available Policy Types ({{ policy_types|length }})</button>
+    </div>
+
+    <!-- Tab Content: Issued Policies -->
+    <div id="content-issued" class="tab-content flex flex-col gap-6">
+        <!-- Stats and Search -->
+        <div class="flex flex-col md:flex-row gap-4 justify-between items-center mb-2">
+            <div class="flex gap-4">
+                <div class="glass px-4 py-2 rounded-full text-sm font-medium">
+                    <span class="text-primary">{{ status_counts.get('published', 0) }}</span> Active
+                </div>
+                <div class="glass px-4 py-2 rounded-full text-sm font-medium">
+                    <span class="text-accent">{{ status_counts.get('suspended', 0) }}</span> Suspended
+                </div>
+            </div>
+            
+            <form method="GET" class="flex gap-2 w-full md:w-1/3">
+                <input type="text" name="search" value="{{ search_query or '' }}" placeholder="Search by policy number..." class="flex-1 bg-surface border border-divider rounded-full px-4 py-2 text-sm focus:outline-none focus:border-primary">
+                <button type="submit" class="magnetic-btn bg-ink text-surface px-4 py-2 rounded-full text-sm font-medium">Search</button>
+            </form>
+        </div>
+
+        <div class="glass rounded-3xl p-1 overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="border-b border-divider/50 bg-surface/30">
+                            <th class="py-4 px-6 font-medium text-sm text-muted">Policy Number</th>
+                            <th class="py-4 px-6 font-medium text-sm text-muted">Client</th>
+                            <th class="py-4 px-6 font-medium text-sm text-muted">Vehicle</th>
+                            <th class="py-4 px-6 font-medium text-sm text-muted">Type</th>
+                            <th class="py-4 px-6 font-medium text-sm text-muted">Effective Date</th>
+                            <th class="py-4 px-6 font-medium text-sm text-muted">Status</th>
+                            <th class="py-4 px-6 font-medium text-sm text-muted text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="text-sm">
+                        {% for policy in policies %}
+                        <tr class="border-b border-divider/30 hover:bg-surface/50 transition-colors">
+                            <td class="py-4 px-6 font-mono font-medium text-ink">{{ policy.policy_number }}</td>
+                            <td class="py-4 px-6">{{ policy.client_name }}</td>
+                            <td class="py-4 px-6 font-mono">{{ policy.vehicle_reg }}</td>
+                            <td class="py-4 px-6 capitalize">{{ policy.policy_type }}</td>
+                            <td class="py-4 px-6 text-muted">{{ policy.effective_date }}</td>
+                            <td class="py-4 px-6">
+                                {% if policy.status == 'published' %}
+                                    <span class="px-3 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">Active</span>
+                                {% elif policy.status == 'suspended' %}
+                                    <span class="px-3 py-1 rounded-full text-xs font-medium bg-accent/10 text-accent">Suspended</span>
+                                {% else %}
+                                    <span class="px-3 py-1 rounded-full text-xs font-medium bg-muted/10 text-muted">{{ policy.status|title }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="py-4 px-6 text-right flex justify-end gap-3">
+                                <a href="{{ url_for('policies.detail', policy_id=policy._id) }}" class="text-primary hover:underline font-medium">View</a>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="7" class="py-8 text-center text-muted">No policies found.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab Content: Available Policies -->
+    <div id="content-available" class="tab-content hidden flex flex-col gap-6">
+        <div class="flex justify-between items-center mb-2">
+            <p class="text-sm text-muted">Manage the types of insurance policies the agency can issue.</p>
+            <button onclick="openPolicyTypeModal()" class="magnetic-btn border border-primary text-primary bg-surface hover:bg-primary/5 px-4 py-2 rounded-full text-sm font-semibold shadow-sm transition-colors">
+                + Add Policy Type
+            </button>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {% for t in policy_types %}
+            <div class="glass p-6 rounded-3xl border border-divider/60 hover:border-primary/30 transition-all flex flex-col gap-3">
+                <div class="flex justify-between items-start">
+                    <h3 class="text-xl font-display font-bold text-ink capitalize">{{ t.name }}</h3>
+                    <span class="bg-surface text-primary border border-divider px-2.5 py-1 rounded-full text-xs font-semibold">Base: KES {{ "{:,.2f}".format(t.default_premium) }}</span>
+                </div>
+                <p class="text-sm text-muted line-clamp-3">{{ t.description }}</p>
+                <div class="mt-auto pt-4 border-t border-divider/50 flex justify-end">
+                    <form action="/policies/types/{{ t._id }}/delete" method="POST" onsubmit="return confirm('Are you sure you want to delete this policy type?');">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <button type="submit" class="text-xs text-red-500 hover:text-red-700 font-medium">Delete</button>
+                    </form>
+                </div>
+            </div>
+            {% else %}
+            <div class="col-span-full glass p-8 rounded-3xl text-center">
+                <p class="text-muted">No policy types configured yet.</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- Add Policy Type Modal -->
+<div id="addPolicyTypeModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-ink/50 backdrop-blur-sm overflow-y-auto py-10">
+    <div class="glass rounded-3xl p-8 max-w-md w-full mx-4 shadow-xl border border-divider/60 my-auto">
+        <h2 class="text-2xl font-display font-bold text-ink mb-6">Add Policy Type</h2>
+        <form id="addPolicyTypeForm" method="POST" action="/policies/types/add" class="flex flex-col gap-4">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <div class="flex flex-col gap-1">
+                <label for="pt_name" class="text-xs font-semibold text-muted ml-1">Policy Name</label>
+                <input type="text" name="name" id="pt_name" required placeholder="e.g. Comprehensive" class="w-full bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary transition-all">
+            </div>
+            
+            <div class="flex flex-col gap-1">
+                <label for="pt_desc" class="text-xs font-semibold text-muted ml-1">Description</label>
+                <textarea name="description" id="pt_desc" rows="3" required placeholder="Details about coverage..." class="w-full bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary transition-all resize-none"></textarea>
+            </div>
+
+            <div class="flex flex-col gap-1">
+                <label for="pt_premium" class="text-xs font-semibold text-muted ml-1">Default Base Premium (KES)</label>
+                <input type="number" name="default_premium" id="pt_premium" step="0.01" min="0" required placeholder="0.00" class="w-full bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary transition-all">
+            </div>
+            
+            <div class="flex justify-end gap-3 mt-4">
+                <button type="button" onclick="closePolicyTypeModal()" class="px-6 py-2.5 rounded-full text-muted hover:bg-surface border border-transparent hover:border-divider/50 transition-colors font-medium text-sm">Cancel</button>
+                <button type="submit" class="magnetic-btn bg-primary text-surface px-6 py-2.5 rounded-full font-medium shadow-sm text-sm">Save Type</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function switchTab(tabId) {
+        const contents = document.querySelectorAll('.tab-content');
+        contents.forEach(content => content.classList.add('hidden'));
+        
+        const activeContent = document.getElementById(`content-${tabId}`);
+        if (activeContent) activeContent.classList.remove('hidden');
+        
+        const buttons = document.querySelectorAll('.tab-btn');
+        buttons.forEach(btn => {
+            btn.classList.remove('border-primary', 'text-primary');
+            btn.classList.add('border-transparent', 'text-muted');
+        });
+        
+        const activeBtn = document.getElementById(`tab-btn-${tabId}`);
+        if (activeBtn) {
+            activeBtn.classList.remove('border-transparent', 'text-muted');
+            activeBtn.classList.add('border-primary', 'text-primary');
+        }
+    }
+
+    function openPolicyTypeModal() {
+        const modal = document.getElementById('addPolicyTypeModal');
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
+
+    function closePolicyTypeModal() {
+        const modal = document.getElementById('addPolicyTypeModal');
+        modal.classList.remove('flex');
+        modal.classList.add('hidden');
+        document.getElementById('addPolicyTypeForm').reset();
+    }
+
+    // Stagger table rows
+    gsap.from("tbody tr", {
+        y: 20,
+        opacity: 0,
+        duration: 0.5,
+        stagger: 0.1,
+        ease: "power2.out",
+        delay: 0.2
+    });
+</script>
+{% endblock %}

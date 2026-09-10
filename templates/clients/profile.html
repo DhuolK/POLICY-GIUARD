@@ -1,0 +1,460 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="flex flex-col gap-8">
+    <!-- Header with Breadcrumbs and Actions -->
+    <header class="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+        <div>
+            <div class="flex items-center gap-2 text-sm text-muted mb-2">
+                <a href="{{ url_for('clients.index') }}" class="hover:text-primary transition-colors">Clients</a>
+                <span>&rarr;</span>
+                <span class="text-ink">Profile</span>
+            </div>
+            <h1 class="text-4xl font-display font-bold text-ink">{{ client.full_name }}</h1>
+            <p class="text-muted mt-1 font-mono text-xs">System ID: {{ client._id }}</p>
+        </div>
+        
+        <div class="flex gap-3">
+            <a href="/vehicles/?search={{ client.client_id }}" class="border border-divider rounded-full px-5 py-2 text-sm text-primary bg-surface hover:bg-surface/50 transition-colors font-semibold shadow-sm">
+                Manage Vehicles
+            </a>
+            <a href="/policies/new?client_id={{ client._id }}" class="magnetic-btn bg-primary text-surface px-5 py-2 rounded-full text-sm font-semibold shadow-sm hover:shadow-md transition-shadow">
+                + Add Issued Policy
+            </a>
+        </div>
+    </header>
+
+    <!-- Tab Navigation -->
+    <div class="border-b border-divider/50 flex gap-6 text-sm font-medium">
+        <button onclick="switchTab('overview')" id="tab-btn-overview" class="tab-btn pb-4 border-b-2 border-primary text-primary transition-all">Overview</button>
+        <button onclick="switchTab('vehicles')" id="tab-btn-vehicles" class="tab-btn pb-4 border-b-2 border-transparent text-muted hover:text-ink transition-all">Vehicles ({{ vehicles|length }})</button>
+        <button onclick="switchTab('policies')" id="tab-btn-policies" class="tab-btn pb-4 border-b-2 border-transparent text-muted hover:text-ink transition-all">Policies ({{ policies|length }})</button>
+        <button onclick="switchTab('claims')" id="tab-btn-claims" class="tab-btn pb-4 border-b-2 border-transparent text-muted hover:text-ink transition-all">Claims ({{ claims|length }})</button>
+    </div>
+
+    <!-- Tab Contents -->
+    <div class="flex flex-col gap-8">
+        <!-- 1. Overview Tab -->
+        <div id="content-overview" class="tab-content flex flex-col lg:flex-row gap-8">
+            <!-- Left Side Details Card -->
+            <div class="glass rounded-3xl p-6 lg:w-1/3 flex flex-col gap-6">
+                <h2 class="text-xl font-display font-bold text-ink">Client Details</h2>
+                
+                <div class="flex flex-col gap-4 text-sm">
+                    <div class="flex justify-between border-b border-divider/30 pb-3">
+                        <span class="text-muted">Full Name</span>
+                        <span class="font-medium text-ink">{{ client.full_name }}</span>
+                    </div>
+                    <div class="flex justify-between border-b border-divider/30 pb-3">
+                        <span class="text-muted">Client ID</span>
+                        <span class="font-medium font-mono text-ink">{{ client.client_id }}</span>
+                    </div>
+                    <div class="flex justify-between border-b border-divider/30 pb-3">
+                        <span class="text-muted">KRA PIN</span>
+                        <span class="font-medium font-mono text-ink">{{ client.kra_pin or 'N/A' }}</span>
+                    </div>
+                    <div class="flex justify-between border-b border-divider/30 pb-3">
+                        <span class="text-muted">Phone Number</span>
+                        <span class="font-medium text-ink">{{ client.phone }}</span>
+                    </div>
+                    <div class="flex justify-between border-b border-divider/30 pb-3">
+                        <span class="text-muted">Email Address</span>
+                        <span class="font-medium text-ink">{{ client.email or 'N/A' }}</span>
+                    </div>
+                    <div class="flex justify-between pb-1">
+                        <span class="text-muted">Registered On</span>
+                        <span class="font-medium text-ink">
+                            {% if client.created_at %}
+                                {{ client.created_at.strftime('%b %d, %Y') }}
+                            {% else %}
+                                Unknown
+                            {% endif %}
+                        </span>
+                    </div>
+                    {% if workers %}
+                    <!-- Assignment control: backend-enforced admin-only (POST /clients/<id>/assign) -->
+                    <form method="post" action="{{ url_for('clients.assign', client_id=client._id) }}" class="flex items-center justify-between gap-2 border-t border-divider/30 pt-3">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <label for="assigned_worker_id" class="text-muted">Assigned Worker</label>
+                        <select id="assigned_worker_id" name="worker_id" onchange="this.form.submit()" class="bg-surface border border-divider rounded-xl px-2 py-1.5 text-xs font-medium text-ink focus:outline-none focus:border-primary transition-all max-w-[60%]">
+                            <option value="" {% if not client.assigned_worker_id %}selected{% endif %}>Unassigned</option>
+                            {% for worker in workers %}
+                            <option value="{{ worker._id }}" {% if client.assigned_worker_id == worker._id %}selected{% endif %}>{{ worker.full_name }}</option>
+                            {% endfor %}
+                        </select>
+                        <noscript><button type="submit" class="bg-ink text-surface px-3 py-1 rounded-xl text-xs font-medium hover:bg-primary transition-colors">Update</button></noscript>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Right Side Stats and Overview Widgets -->
+            <div class="flex-1 flex flex-col gap-8">
+                <!-- Count Cards Grid -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                    <div class="glass rounded-3xl p-6 flex flex-col justify-between h-36">
+                        <span class="text-muted text-sm font-semibold">Total Vehicles</span>
+                        <div class="flex justify-between items-baseline">
+                            <span class="text-5xl font-display font-bold text-primary">{{ vehicles|length }}</span>
+                            <span class="text-muted text-xs">Registered</span>
+                        </div>
+                    </div>
+                    
+                    <div class="glass rounded-3xl p-6 flex flex-col justify-between h-36">
+                        <span class="text-muted text-sm font-semibold">Active Policies</span>
+                        <div class="flex justify-between items-baseline">
+                            {% set active_count = namespace(value=0) %}
+                            {% for p in policies %}
+                                {% if p.status == 'published' %}
+                                    {% set active_count.value = active_count.value + 1 %}
+                                {% endif %}
+                            {% endfor %}
+                            <span class="text-5xl font-display font-bold text-green-600">{{ active_count.value }}</span>
+                            <span class="text-muted text-xs">In Force</span>
+                        </div>
+                    </div>
+                    
+                    <div class="glass rounded-3xl p-6 flex flex-col justify-between h-36">
+                        <span class="text-muted text-sm font-semibold">Total Claims</span>
+                        <div class="flex justify-between items-baseline">
+                            <span class="text-5xl font-display font-bold text-accent">{{ claims|length }}</span>
+                            <span class="text-muted text-xs">Filed</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Activity Feed or Quick Actions Placeholder -->
+                <div class="glass rounded-3xl p-6 flex flex-col gap-4">
+                    <h3 class="text-lg font-display font-bold text-ink">Recent Profile Notes</h3>
+                    <div class="border border-divider/40 bg-surface/30 rounded-2xl p-4 text-sm text-muted italic">
+                        No custom notes are currently pinned to this client profile. Staff can log comments on policies or claim files directly from their respective tabs.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. Vehicles Tab -->
+        <div id="content-vehicles" class="tab-content hidden glass rounded-3xl p-6">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-display font-bold text-ink">Registered Vehicles</h2>
+                <div class="flex gap-2">
+                    <a href="/vehicles/" class="border border-divider rounded-full px-4 py-1.5 text-xs text-muted hover:text-ink hover:bg-surface/50 transition-colors inline-flex items-center">
+                        Search Registry
+                    </a>
+                    <button onclick="openVehicleModal()" class="magnetic-btn bg-primary text-surface px-4 py-1.5 rounded-full text-xs font-semibold shadow-sm hover:shadow-md transition-shadow">
+                        + Add Vehicle
+                    </button>
+                </div>
+            </div>
+            
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse text-sm">
+                    <thead>
+                        <tr class="bg-primary text-surface">
+                            <th class="py-4 px-4 font-semibold">Registration Number</th>
+                            <th class="py-4 px-4 font-semibold">Make & Model</th>
+                            <th class="py-4 px-4 font-semibold">Year</th>
+                            <th class="py-4 px-4 font-semibold">Vehicle Type</th>
+                            <th class="py-4 px-4 font-semibold text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for v in vehicles %}
+                        <tr class="border-b border-divider/30 hover:bg-surface/50 transition-colors">
+                            <td class="py-4 px-4 font-mono font-semibold text-primary">{{ v.registration_number }}</td>
+                            <td class="py-4 px-4 font-medium">{{ v.make }} {{ v.model }}</td>
+                            <td class="py-4 px-4 text-muted">{{ v.year or 'N/A' }}</td>
+                            <td class="py-4 px-4">
+                                <span class="capitalize bg-divider/40 text-ink px-2.5 py-1 rounded-full text-xs font-semibold">{{ v.vehicle_type }}</span>
+                            </td>
+                            <td class="py-4 px-4 text-right">
+                                <a href="/policies/new?vehicle_id={{ v._id }}&client_id={{ client._id }}" class="text-primary hover:underline text-xs font-semibold">Add Issued Policy &rarr;</a>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="5" class="py-8 text-center text-muted">No vehicles found for this client.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 3. Policies Tab -->
+        <div id="content-policies" class="tab-content hidden glass rounded-3xl p-6">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-display font-bold text-ink">Insurance Policies</h2>
+                <a href="/policies/new?client_id={{ client._id }}" class="magnetic-btn bg-primary text-surface px-4 py-2 rounded-full text-xs font-semibold shadow-sm">
+                    + Add Issued Policy
+                </a>
+            </div>
+            
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse text-sm">
+                    <thead>
+                        <tr class="bg-primary text-surface">
+                            <th class="py-4 px-4 font-semibold">Policy Number</th>
+                            <th class="py-4 px-4 font-semibold">Vehicle Reg</th>
+                            <th class="py-4 px-4 font-semibold">Policy Type</th>
+                            <th class="py-4 px-4 font-semibold">Premium Amount</th>
+                            <th class="py-4 px-4 font-semibold">Status</th>
+                            <th class="py-4 px-4 font-semibold text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for p in policies %}
+                        <tr class="border-b border-divider/30 hover:bg-surface/50 transition-colors">
+                            <td class="py-4 px-4 font-mono font-semibold">{{ p.policy_number }}</td>
+                            <td class="py-4 px-4 font-mono text-muted">{{ p.vehicle_reg }}</td>
+                            <td class="py-4 px-4 capitalize">{{ p.policy_type }}</td>
+                            <td class="py-4 px-4 font-mono font-medium">KES {{ "{:,.2f}".format(p.premium_amount) if p.premium_amount is number else p.premium_amount }}</td>
+                            <td class="py-4 px-4">
+                                {% if p.status == 'published' %}
+                                    <span class="bg-green-100 text-green-700 px-2.5 py-1 rounded-full text-xs font-semibold">Active</span>
+                                {% elif p.status == 'Suspended' %}
+                                    <span class="bg-red-100 text-red-700 px-2.5 py-1 rounded-full text-xs font-semibold">Suspended</span>
+                                {% elif p.status == 'Dormant' %}
+                                    <span class="bg-yellow-100 text-yellow-700 px-2.5 py-1 rounded-full text-xs font-semibold">Dormant</span>
+                                {% else %}
+                                    <span class="bg-gray-100 text-gray-700 px-2.5 py-1 rounded-full text-xs font-semibold">{{ p.status }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="py-4 px-4 text-right">
+                                <a href="/policies/{{ p._id }}" class="border border-divider rounded-full px-3 py-1 text-xs text-primary font-medium bg-surface hover:bg-surface/50 transition-colors">View Details</a>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="6" class="py-8 text-center text-muted">No insurance policies have been issued to this client yet.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 4. Claims Tab -->
+        <div id="content-claims" class="tab-content hidden glass rounded-3xl p-6">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-display font-bold text-ink">Claims History</h2>
+                <a href="/claims/" class="border border-divider rounded-full px-4 py-1.5 text-xs text-primary font-medium bg-surface hover:bg-surface/50 transition-colors">
+                    Global Claims List
+                </a>
+            </div>
+            
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse text-sm">
+                    <thead>
+                        <tr class="bg-primary text-surface">
+                            <th class="py-4 px-4 font-semibold">Claim Number</th>
+                            <th class="py-4 px-4 font-semibold">Policy Number</th>
+                            <th class="py-4 px-4 font-semibold">Incident Date</th>
+                            <th class="py-4 px-4 font-semibold">Status</th>
+                            <th class="py-4 px-4 font-semibold text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for c in claims %}
+                        <tr class="border-b border-divider/30 hover:bg-surface/50 transition-colors">
+                            <td class="py-4 px-4 font-mono font-semibold">{{ c.claim_number }}</td>
+                            <td class="py-4 px-4 font-mono text-muted">{{ c.policy_number }}</td>
+                            <td class="py-4 px-4 text-muted">{{ c.incident_date }}</td>
+                            <td class="py-4 px-4">
+                                {% if c.status == 'approved' %}
+                                    <span class="bg-green-100 text-green-700 px-2.5 py-1 rounded-full text-xs font-semibold">Approved</span>
+                                {% elif c.status == 'rejected' %}
+                                    <span class="bg-red-100 text-red-700 px-2.5 py-1 rounded-full text-xs font-semibold">Rejected</span>
+                                {% elif c.status == 'review' %}
+                                    <span class="bg-yellow-100 text-yellow-700 px-2.5 py-1 rounded-full text-xs font-semibold">Under Review</span>
+                                {% else %}
+                                    <span class="bg-blue-100 text-primary px-2.5 py-1 rounded-full text-xs font-semibold capitalize">{{ c.status }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="py-4 px-4 text-right">
+                                <a href="/claims/{{ c._id }}" class="border border-divider rounded-full px-3 py-1 text-xs text-primary font-medium bg-surface hover:bg-surface/50 transition-colors">View Timeline</a>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="5" class="py-8 text-center text-muted">No claims filed under this client profile.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Vehicle Modal -->
+<div id="addVehicleModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-ink/50 backdrop-blur-sm overflow-y-auto py-10">
+    <div class="glass rounded-3xl p-8 max-w-md w-full mx-4 shadow-xl border border-divider/60 my-auto">
+        <h2 class="text-2xl font-display font-bold text-ink mb-6">Add New Vehicle</h2>
+        <form id="addVehicleForm" onsubmit="submitVehicleForm(event)" class="flex flex-col gap-4">
+            <div id="vehicleFormError" class="hidden text-red-500 text-sm mb-2 font-medium bg-red-50 p-3 rounded-xl border border-red-200"></div>
+            
+            <input type="hidden" id="v_owner_id" value="{{ client._id }}">
+            
+            <div class="flex flex-col gap-1">
+                <label for="v_reg_number" class="text-xs font-semibold text-muted ml-1">Registration Number</label>
+                <input type="text" id="v_reg_number" required placeholder="e.g. KCA 123A" class="w-full bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary font-mono uppercase transition-all">
+            </div>
+            
+            <div class="grid grid-cols-2 gap-3">
+                <div class="flex flex-col gap-1">
+                    <label for="v_add_make" class="text-xs font-semibold text-muted ml-1">Make</label>
+                    <input type="text" id="v_add_make" required placeholder="e.g. Toyota" class="w-full bg-surface border border-divider rounded-xl px-4.5 py-3 text-sm focus:outline-none focus:border-primary transition-all">
+                </div>
+                <div class="flex flex-col gap-1">
+                    <label for="v_add_model" class="text-xs font-semibold text-muted ml-1">Model</label>
+                    <input type="text" id="v_add_model" required placeholder="e.g. Corolla" class="w-full bg-surface border border-divider rounded-xl px-4.5 py-3 text-sm focus:outline-none focus:border-primary transition-all">
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-3">
+                <div class="flex flex-col gap-1">
+                    <label for="v_add_year" class="text-xs font-semibold text-muted ml-1">Year</label>
+                    <input type="number" id="v_add_year" required placeholder="e.g. 2022" class="w-full bg-surface border border-divider rounded-xl px-4.5 py-3 text-sm focus:outline-none focus:border-primary transition-all">
+                </div>
+                <div class="flex flex-col gap-1">
+                    <label for="v_add_type" class="text-xs font-semibold text-muted ml-1">Vehicle Type</label>
+                    <select id="v_add_type" class="w-full bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary transition-all">
+                        <option value="private" selected>Private</option>
+                        <option value="commercial">Commercial</option>
+                        <option value="psv">PSV (Public Service)</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="flex justify-end gap-3 mt-4">
+                <button type="button" onclick="closeVehicleModal()" class="px-6 py-2.5 rounded-full text-muted hover:bg-surface border border-transparent hover:border-divider/50 transition-colors font-medium text-sm">Cancel</button>
+                <button type="submit" class="magnetic-btn bg-primary text-surface px-6 py-2.5 rounded-full font-medium shadow-sm text-sm">Save Vehicle</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function switchTab(tabId) {
+    // Hide all tab contents
+    const contents = document.querySelectorAll('.tab-content');
+    contents.forEach(content => {
+        content.classList.add('hidden');
+    });
+    
+    // Show active tab content
+    const activeContent = document.getElementById(`content-${tabId}`);
+    if (activeContent) {
+        activeContent.classList.remove('hidden');
+    }
+    
+    // Reset all tab button styles
+    const buttons = document.querySelectorAll('.tab-btn');
+    buttons.forEach(btn => {
+        btn.classList.remove('border-primary', 'text-primary');
+        btn.classList.add('border-transparent', 'text-muted');
+    });
+    
+    // Set active tab button style
+    const activeBtn = document.getElementById(`tab-btn-${tabId}`);
+    if (activeBtn) {
+        activeBtn.classList.remove('border-transparent', 'text-muted');
+        activeBtn.classList.add('border-primary', 'text-primary');
+    }
+}
+
+function openVehicleModal() {
+    const modal = document.getElementById('addVehicleModal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function closeVehicleModal() {
+    const modal = document.getElementById('addVehicleModal');
+    modal.classList.remove('flex');
+    modal.classList.add('hidden');
+    
+    document.getElementById('addVehicleForm').reset();
+    document.getElementById('vehicleFormError').classList.add('hidden');
+    
+    const inputs = ['v_reg_number', 'v_add_make', 'v_add_model', 'v_add_year'];
+    inputs.forEach(id => {
+        const input = document.getElementById(id);
+        if (input) {
+            input.classList.remove('border-red-500');
+            input.classList.add('border-divider');
+        }
+    });
+}
+
+async function submitVehicleForm(event) {
+    event.preventDefault();
+    
+    const errorDiv = document.getElementById('vehicleFormError');
+    errorDiv.classList.add('hidden');
+    
+    const owner_id = document.getElementById('v_owner_id').value;
+    const registration_number = document.getElementById('v_reg_number').value.trim();
+    const make = document.getElementById('v_add_make').value.trim();
+    const model = document.getElementById('v_add_model').value.trim();
+    const year = document.getElementById('v_add_year').value.trim();
+    const vehicle_type = document.getElementById('v_add_type').value;
+    
+    const inputs = { v_reg_number: registration_number, v_add_make: make, v_add_model: model, v_add_year: year };
+    let hasEmpty = false;
+    
+    for (const [id, val] of Object.entries(inputs)) {
+        const input = document.getElementById(id);
+        if (!val) {
+            input.classList.remove('border-divider');
+            input.classList.add('border-red-500');
+            hasEmpty = true;
+        } else {
+            input.classList.remove('border-red-500');
+            input.classList.add('border-divider');
+        }
+    }
+    
+    if (hasEmpty) {
+        errorDiv.innerText = "Please fill in all vehicle fields.";
+        errorDiv.classList.remove('hidden');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/vehicles/api/add', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token() }}'
+            },
+            body: JSON.stringify({
+                owner_id,
+                registration_number,
+                make,
+                model,
+                year,
+                vehicle_type
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok && result.success) {
+            closeVehicleModal();
+            window.location.reload();
+        } else {
+            errorDiv.innerText = result.error || "Failed to add vehicle. Please try again.";
+            errorDiv.classList.remove('hidden');
+            if (result.error && result.error.includes("already exists")) {
+                document.getElementById('v_reg_number').classList.add('border-red-500');
+            }
+        }
+    } catch (err) {
+        errorDiv.innerText = "Network error. Unable to contact server.";
+        errorDiv.classList.remove('hidden');
+    }
+}
+</script>
+{% endblock %}

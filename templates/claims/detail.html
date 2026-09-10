@@ -1,0 +1,314 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="flex flex-col gap-6 max-w-4xl mx-auto">
+    <header class="mb-2">
+        <a href="{{ url_for('claims.list') }}" class="text-accent hover:underline text-sm font-medium flex items-center gap-1 mb-4">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="19" y1="12" x2="5" y2="12"></line>
+                <polyline points="12 19 5 12 12 5"></polyline>
+            </svg>
+            Back to Claims
+        </a>
+        
+        {% if claim %}
+        <div class="flex justify-between items-start">
+            <div>
+                <h1 class="text-3xl font-display font-bold text-ink">Claim {{ claim.claim_number }}</h1>
+                <p class="text-muted mt-1">Filed {{ claim.created_at.strftime('%B %d, %Y') if claim.created_at else 'N/A' }}</p>
+            </div>
+            <div class="flex items-center gap-2">
+                {% if claim.fraud_level == 'high_risk' %}
+                    <span class="px-4 py-2 rounded-full text-xs font-bold bg-rose-600 text-white shadow-sm flex items-center gap-1">
+                        ⚠️ High Fraud Risk
+                    </span>
+                {% elif claim.fraud_level == 'medium_review' %}
+                    <span class="px-4 py-2 rounded-full text-xs font-bold bg-amber-500 text-white shadow-sm flex items-center gap-1">
+                        ⚡ Medium Risk Review
+                    </span>
+                {% else %}
+                    <span class="px-4 py-2 rounded-full text-xs font-bold bg-emerald-600 text-white shadow-sm flex items-center gap-1">
+                        ✓ Low Fraud Risk
+                    </span>
+                {% endif %}
+
+                {% if claim.status == 'approved' %}
+                    <span class="px-4 py-2 rounded-full text-sm font-semibold bg-primary/10 text-primary">Approved</span>
+                {% elif claim.status == 'flagged_investigation' %}
+                    <span class="px-4 py-2 rounded-full text-sm font-semibold bg-rose-500/10 text-rose-600 border border-rose-500/20">Flagged for Investigation</span>
+                {% elif claim.status == 'review' %}
+                    <span class="px-4 py-2 rounded-full text-sm font-semibold bg-accent/10 text-accent">In Review</span>
+                {% elif claim.status == 'rejected' %}
+                    <span class="px-4 py-2 rounded-full text-sm font-semibold bg-red-500/10 text-red-500">Rejected</span>
+                {% elif claim.status == 'submitted' %}
+                    <span class="px-4 py-2 rounded-full text-sm font-semibold bg-blue-500/10 text-blue-600">Submitted</span>
+                {% else %}
+                    <span class="px-4 py-2 rounded-full text-sm font-semibold bg-muted/10 text-muted">{{ claim.status|title }}</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Fraud Risk Inspection Banner -->
+        {% if claim.fraud_flags and claim.fraud_flags|length > 0 %}
+        <div class="rounded-3xl p-6 shadow-sm mt-6 border {% if claim.fraud_level == 'high_risk' %}bg-rose-500/5 border-rose-500/30{% else %}bg-amber-500/5 border-amber-500/30{% endif %}">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="text-base font-bold {% if claim.fraud_level == 'high_risk' %}text-rose-600{% else %}text-amber-700{% endif %} flex items-center gap-2">
+                    🛡️ Fraud Risk Inspection Assessment (Score: {{ claim.fraud_score }}/100)
+                </h2>
+                <span class="text-xs font-mono font-semibold px-3 py-1 rounded-full {% if claim.fraud_level == 'high_risk' %}bg-rose-500 text-white{% else %}bg-amber-500 text-white{% endif %} uppercase">
+                    {{ claim.fraud_level|replace('_', ' ') }}
+                </span>
+            </div>
+            <p class="text-xs text-muted mb-3">The automated engine detected the following risk triggers on this claim filing:</p>
+            <ul class="list-disc list-inside text-xs text-ink space-y-1.5 font-medium">
+                {% for flag in claim.fraud_flags %}
+                    <li class="{% if claim.fraud_level == 'high_risk' %}text-rose-900{% else %}text-amber-900{% endif %}">{{ flag }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        <!-- Payout Estimate Card -->
+        <div class="glass rounded-3xl p-6 shadow-sm mt-6 border border-accent/20">
+            <h2 class="text-lg font-display font-bold text-ink mb-1">Claim Financials & Estimated Payout</h2>
+            <p class="text-xs text-muted mb-4">Calculated coverage amount in KSh based on repair cost and policy terms</p>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="p-4 bg-surface rounded-2xl border border-divider">
+                    <p class="text-xs text-muted">Estimated Repair Cost</p>
+                    <p class="text-xl font-display font-bold text-ink mt-1">KSh {{ "{:,.2f}".format(claim.estimated_repair_cost or 0) }}</p>
+                </div>
+                <div class="p-4 bg-surface rounded-2xl border border-divider">
+                    <p class="text-xs text-muted">Policy Excess (Deductible)</p>
+                    <p class="text-xl font-display font-bold text-rose-600 mt-1">- KSh {{ "{:,.2f}".format(claim.deductible_amount or 0) }}</p>
+                </div>
+                <div class="p-4 bg-primary/10 rounded-2xl border border-primary/20">
+                    <p class="text-xs text-primary font-medium">Estimated Net Payout</p>
+                    <p class="text-xl font-display font-bold text-primary mt-1">KSh {{ "{:,.2f}".format(claim.estimated_payout or 0) }}</p>
+                </div>
+            </div>
+            {% if claim.coverage_notes %}
+                <p class="text-xs text-muted mt-3 italic">Note: {{ claim.coverage_notes }}</p>
+            {% endif %}
+        </div>
+        
+        <!-- Client & Policy Info -->
+        <div class="glass rounded-3xl p-8 shadow-sm mt-6">
+            <h2 class="text-lg font-display font-bold text-ink mb-4">Client & Policy Information</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3 text-sm">
+                <div class="flex justify-between border-b border-divider/30 pb-2">
+                    <span class="text-muted">Client Name</span>
+                    <span class="font-medium text-ink">{{ claim.client_name or 'N/A' }}</span>
+                </div>
+                <div class="flex justify-between border-b border-divider/30 pb-2">
+                    <span class="text-muted">Policy Number</span>
+                    <span class="font-mono font-medium text-ink">{{ claim.policy_number or 'N/A' }}</span>
+                </div>
+                <div class="flex justify-between border-b border-divider/30 pb-2">
+                    <span class="text-muted">Phone</span>
+                    <span class="font-medium text-ink">{{ claim.client_phone or 'N/A' }}</span>
+                </div>
+                <div class="flex justify-between border-b border-divider/30 pb-2">
+                    <span class="text-muted">Email</span>
+                    <span class="font-medium text-ink">{{ claim.client_email or 'N/A' }}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Section A.1: Insured -->
+        {% if claim.insured_first_name or claim.insured_last_name %}
+        <div class="glass rounded-3xl p-8 shadow-sm mt-4">
+            <h2 class="text-lg font-display font-bold text-ink mb-4">The Insured</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3 text-sm">
+                <div class="flex justify-between border-b border-divider/30 pb-2">
+                    <span class="text-muted">Name</span>
+                    <span class="font-medium text-ink">{{ claim.insured_title or '' }} {{ claim.insured_first_name or '' }} {{ claim.insured_last_name or '' }}</span>
+                </div>
+                <div class="flex justify-between border-b border-divider/30 pb-2">
+                    <span class="text-muted">Phone</span>
+                    <span class="font-medium text-ink">{{ claim.insured_phone or 'N/A' }}</span>
+                </div>
+                <div class="flex justify-between border-b border-divider/30 pb-2 md:col-span-2">
+                    <span class="text-muted">Postal Address</span>
+                    <span class="font-medium text-ink">{{ claim.insured_postal_address or 'N/A' }}</span>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Section A.2: Vehicle -->
+        {% if claim.accident_vehicle_reg %}
+        <div class="glass rounded-3xl p-8 shadow-sm mt-4">
+            <h2 class="text-lg font-display font-bold text-ink mb-4">Accident Vehicle</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3 text-sm">
+                <div class="flex justify-between border-b border-divider/30 pb-2">
+                    <span class="text-muted">Registration</span>
+                    <span class="font-mono font-bold text-ink">{{ claim.accident_vehicle_reg }}</span>
+                </div>
+                <div class="flex justify-between border-b border-divider/30 pb-2">
+                    <span class="text-muted">Make & Model</span>
+                    <span class="font-medium text-ink">{{ claim.accident_vehicle_make_model or 'N/A' }}</span>
+                </div>
+                <div class="flex justify-between border-b border-divider/30 pb-2">
+                    <span class="text-muted">Year</span>
+                    <span class="font-medium text-ink">{{ claim.accident_vehicle_year or 'N/A' }}</span>
+                </div>
+                <div class="flex justify-between border-b border-divider/30 pb-2">
+                    <span class="text-muted">Seating Capacity</span>
+                    <span class="font-medium text-ink">{{ claim.accident_vehicle_seating_capacity or 'N/A' }}</span>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Section A.3: Driver -->
+        {% if claim.driver_name %}
+        <div class="glass rounded-3xl p-8 shadow-sm mt-4">
+            <h2 class="text-lg font-display font-bold text-ink mb-4">Driver Details</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3 text-sm">
+                <div class="flex justify-between border-b border-divider/30 pb-2">
+                    <span class="text-muted">Name</span>
+                    <span class="font-medium text-ink">{{ claim.driver_name }}</span>
+                </div>
+                <div class="flex justify-between border-b border-divider/30 pb-2">
+                    <span class="text-muted">License Number</span>
+                    <span class="font-mono font-medium text-ink">{{ claim.driver_license_number or 'N/A' }}</span>
+                </div>
+                <div class="flex justify-between border-b border-divider/30 pb-2">
+                    <span class="text-muted">Phone</span>
+                    <span class="font-medium text-ink">{{ claim.driver_phone or 'N/A' }}</span>
+                </div>
+                <div class="flex justify-between border-b border-divider/30 pb-2">
+                    <span class="text-muted">Experience</span>
+                    <span class="font-medium text-ink">{{ claim.driver_experience_years or 'N/A' }} years</span>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Section A.12: Accident Details -->
+        {% if claim.incident_date or claim.incident_place %}
+        <div class="glass rounded-3xl p-8 shadow-sm mt-4">
+            <h2 class="text-lg font-display font-bold text-ink mb-4">Accident Details</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3 text-sm">
+                <div class="flex justify-between border-b border-divider/30 pb-2">
+                    <span class="text-muted">Date</span>
+                    <span class="font-medium text-ink">{{ claim.incident_date or 'N/A' }}</span>
+                </div>
+                <div class="flex justify-between border-b border-divider/30 pb-2">
+                    <span class="text-muted">Time</span>
+                    <span class="font-medium text-ink">{{ claim.incident_time or 'N/A' }}</span>
+                </div>
+                <div class="flex justify-between border-b border-divider/30 pb-2 md:col-span-2">
+                    <span class="text-muted">Place</span>
+                    <span class="font-medium text-ink">{{ claim.incident_place or 'N/A' }}</span>
+                </div>
+                <div class="flex justify-between border-b border-divider/30 pb-2">
+                    <span class="text-muted">Speed</span>
+                    <span class="font-medium text-ink">{{ claim.incident_speed or 'N/A' }} km/h</span>
+                </div>
+                <div class="flex justify-between border-b border-divider/30 pb-2">
+                    <span class="text-muted">Weather</span>
+                    <span class="font-medium text-ink capitalize">{{ claim.incident_weather or 'N/A' }}</span>
+                </div>
+                <div class="flex justify-between border-b border-divider/30 pb-2">
+                    <span class="text-muted">Visibility</span>
+                    <span class="font-medium text-ink capitalize">{{ claim.incident_visibility or 'N/A' }}</span>
+                </div>
+                <div class="flex justify-between border-b border-divider/30 pb-2">
+                    <span class="text-muted">Road Surface</span>
+                    <span class="font-medium text-ink capitalize">{{ claim.incident_road_surface or 'N/A' }}</span>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Statements -->
+        {% if claim.driver_statement or claim.insured_statement %}
+        <div class="glass rounded-3xl p-8 shadow-sm mt-4">
+            <h2 class="text-lg font-display font-bold text-ink mb-4">Statements</h2>
+            {% if claim.driver_statement %}
+            <div class="mb-4">
+                <p class="text-xs font-semibold text-muted uppercase tracking-wide mb-2">Driver's Statement</p>
+                <p class="text-sm text-ink bg-surface/50 p-4 rounded-xl border border-divider/30">{{ claim.driver_statement }}</p>
+            </div>
+            {% endif %}
+            {% if claim.insured_statement %}
+            <div>
+                <p class="text-xs font-semibold text-muted uppercase tracking-wide mb-2">Insured's Statement</p>
+                <p class="text-sm text-ink bg-surface/50 p-4 rounded-xl border border-divider/30">{{ claim.insured_statement }}</p>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Proof of Claim / Evidence Documents -->
+        <div class="glass rounded-3xl p-6 shadow-sm mt-6">
+            <h2 class="text-lg font-display font-bold text-ink mb-1">Proof of Claim & Supporting Evidence</h2>
+            <p class="text-xs text-muted mb-4">Uploaded photos and official documentation supporting this claim</p>
+
+            {% if claim.proof_files and claim.proof_files|length > 0 %}
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                {% for proof in claim.proof_files %}
+                <div class="bg-surface rounded-2xl p-4 border border-divider flex flex-col justify-between hover:shadow-md transition-shadow">
+                    {% if proof.file_type == 'image' %}
+                    <div class="relative group rounded-xl overflow-hidden mb-3 bg-slate-900/5 aspect-video flex items-center justify-center">
+                        <img src="{{ url_for('static', filename=proof.relative_path) }}" alt="{{ proof.original_filename }}" class="object-cover w-full h-full">
+                        <a href="{{ url_for('static', filename=proof.relative_path) }}" target="_blank" class="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white font-medium text-xs transition-opacity gap-1">
+                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                            View Full Photo
+                        </a>
+                    </div>
+                    {% else %}
+                    <div class="rounded-xl p-4 mb-3 bg-rose-500/10 border border-rose-500/20 flex items-center gap-3">
+                        <svg class="w-8 h-8 text-rose-600 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="16" y1="13" x2="8" y2="13"></line>
+                            <line x1="16" y1="17" x2="8" y2="17"></line>
+                            <polyline points="10 9 9 9 8 9"></polyline>
+                        </svg>
+                        <div class="overflow-hidden">
+                            <p class="text-xs font-bold text-rose-700 uppercase tracking-wider">PDF Document</p>
+                            <p class="text-xs text-ink font-medium truncate">{{ proof.original_filename }}</p>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="flex items-center justify-between pt-2 border-t border-divider/40 text-xs">
+                        <span class="text-muted truncate max-w-[140px]">{{ proof.original_filename }}</span>
+                        <a href="{{ url_for('static', filename=proof.relative_path) }}" download="{{ proof.original_filename }}" class="text-accent font-semibold hover:underline flex items-center gap-1">
+                            Download
+                        </a>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="p-6 text-center bg-surface/50 rounded-2xl border border-divider/50">
+                <p class="text-xs text-muted">No proof files or evidence documents were attached to this claim.</p>
+            </div>
+            {% endif %}
+        </div>
+
+        {% else %}
+        <div class="glass rounded-3xl p-12 text-center mt-6">
+            <p class="text-muted text-lg">Claim not found.</p>
+            <a href="{{ url_for('claims.list') }}" class="magnetic-btn bg-primary text-surface px-6 py-2.5 rounded-full font-medium mt-4 inline-block">Back to Claims</a>
+        </div>
+        {% endif %}
+    </header>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    gsap.from(".glass", {
+        y: 20,
+        opacity: 0,
+        duration: 0.5,
+        stagger: 0.08,
+        ease: "power2.out"
+    });
+</script>
+{% endblock %}

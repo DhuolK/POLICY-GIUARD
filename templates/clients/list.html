@@ -1,0 +1,281 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="flex flex-col gap-8">
+    <header class="flex justify-between items-end">
+        <div>
+            <h1 class="text-4xl font-display font-bold text-ink">Client Management</h1>
+            <p class="text-muted mt-1">View and manage all registered clients</p>
+        </div>
+        
+        <div class="flex gap-4">
+            <button onclick="openModal()" class="magnetic-btn bg-primary text-surface px-6 py-2.5 rounded-full font-medium shadow-sm hover:shadow-md transition-shadow">
+                + Add Client
+            </button>
+        </div>
+    </header>
+
+    <div class="glass rounded-3xl p-6">
+        <form method="GET" class="flex gap-4 mb-6">
+            <input type="text" name="search" value="{{ search_query or '' }}" placeholder="Search clients..." class="flex-1 bg-surface border border-divider rounded-full px-6 py-3 text-sm focus:outline-none focus:border-primary transition-colors">
+            <button type="submit" class="magnetic-btn bg-ink text-surface px-6 py-3 rounded-full font-medium">Search</button>
+        </form>
+
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-primary text-surface text-sm">
+                        <th class="py-4 px-4 font-semibold">Client Name</th>
+                        <th class="py-4 px-4 font-semibold">Vehicle Reg</th>
+                        <th class="py-4 px-4 font-semibold">Client ID</th>
+                        <th class="py-4 px-4 font-semibold">Phone</th>
+                        <th class="py-4 px-4 font-semibold">KRA PIN</th>
+                        {% if workers %}
+                        <th class="py-4 px-4 font-semibold">Assigned To</th>
+                        {% endif %}
+                        <th class="py-4 px-4 font-semibold text-right">Action</th>
+                    </tr>
+                </thead>
+                <tbody class="text-sm">
+                    {% for client in clients %}
+                    <tr class="border-b border-divider/30 hover:bg-surface/50 transition-colors">
+                        <td class="py-4 px-4 font-medium">{{ client.full_name }}</td>
+                        <td class="py-4 px-4">
+                            {% if client.primary_vehicle_reg and client.primary_vehicle_reg != 'N/A' %}
+                                <span class="bg-primary/10 text-primary px-2.5 py-1 rounded-full text-xs font-mono font-semibold">{{ client.primary_vehicle_reg }}</span>
+                            {% else %}
+                                <span class="text-muted text-xs italic">No Vehicle</span>
+                            {% endif %}
+                        </td>
+                        <td class="py-4 px-4 font-mono text-muted">{{ client.client_id }}</td>
+                        <td class="py-4 px-4">{{ client.phone }}</td>
+                        <td class="py-4 px-4 font-mono text-muted">{{ client.kra_pin or 'N/A' }}</td>
+                        {% if workers %}
+                        <td class="py-4 px-4">
+                            <!-- Assignment control: backend-enforced admin-only (POST /clients/<id>/assign) -->
+                            <form method="post" action="{{ url_for('clients.assign', client_id=client._id) }}" class="inline-flex items-center gap-2">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                <select name="worker_id" onchange="this.form.submit()" class="bg-surface border border-divider rounded-xl px-2 py-1 text-xs focus:outline-none focus:border-primary transition-all">
+                                    <option value="" {% if not client.assigned_worker_id %}selected{% endif %}>Unassigned</option>
+                                    {% for worker in workers %}
+                                    <option value="{{ worker._id }}" {% if client.assigned_worker_id == worker._id %}selected{% endif %}>{{ worker.full_name }}</option>
+                                    {% endfor %}
+                                </select>
+                                <noscript><button type="submit" class="bg-ink text-surface px-3 py-1 rounded-xl text-xs font-medium hover:bg-primary transition-colors">Update</button></noscript>
+                            </form>
+                        </td>
+                        {% endif %}
+                        <td class="py-4 px-4 text-right">
+                            <a href="/clients/{{ client._id }}" class="border border-divider rounded-full px-4 py-1.5 text-xs text-primary font-medium bg-surface hover:bg-surface/50 transition-colors inline-block text-center">View Details</a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="{% if workers %}7{% else %}6{% endif %}" class="py-8 text-center text-muted">No clients found matching your criteria.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Add Client Modal -->
+<div id="addClientModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-ink/50 backdrop-blur-sm overflow-y-auto py-10">
+    <div class="glass rounded-3xl p-8 max-w-lg w-full mx-4 shadow-xl border border-divider/60 my-auto">
+        <h2 class="text-2xl font-display font-bold text-ink mb-6">Add New Client</h2>
+        <form id="addClientForm" onsubmit="submitClientForm(event)" class="flex flex-col gap-4">
+            <div id="formError" class="hidden text-red-500 text-sm mb-2 font-medium bg-red-50 p-3 rounded-xl border border-red-200"></div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="flex flex-col gap-1">
+                    <label for="full_name" class="text-xs font-semibold text-muted ml-1">Client Name</label>
+                    <input type="text" id="full_name" required class="w-full bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary transition-all">
+                </div>
+                
+                <div class="flex flex-col gap-1">
+                    <label for="client_id" class="text-xs font-semibold text-muted ml-1">Client ID / ID Number</label>
+                    <input type="text" id="client_id" required class="w-full bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary transition-all">
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="flex flex-col gap-1">
+                    <label for="phone" class="text-xs font-semibold text-muted ml-1">Phone Number</label>
+                    <input type="text" id="phone" required class="w-full bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary transition-all">
+                </div>
+                
+                <div class="flex flex-col gap-1">
+                    <label for="kra_pin" class="text-xs font-semibold text-muted ml-1">KRA PIN</label>
+                    <input type="text" id="kra_pin" required class="w-full bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary transition-all">
+                </div>
+            </div>
+
+            <!-- Email Address Row -->
+            <div class="flex flex-col gap-1">
+                <label for="email" class="text-xs font-semibold text-muted ml-1">Email Address</label>
+                <input type="email" id="email" required placeholder="e.g. client@example.com" class="w-full bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary transition-all">
+            </div>
+
+            <!-- Primary Vehicle Section (Sub-Card) -->
+            <div class="bg-primary/5 rounded-2xl p-4 border border-primary/10 flex flex-col gap-3 mt-2">
+                <h3 class="text-sm font-bold text-primary flex items-center gap-1.5">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18a3.75 3.75 0 0 0 .495-7.467 5.99 5.99 0 0 0-1.925 0A3.75 3.75 0 0 0 11 18z"></path><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 12h-15m15 0a3 3 0 1 1-6 0M4.5 12a3 3 0 1 1 6 0"></path></svg>
+                    Primary Vehicle (Optional)
+                </h3>
+                
+                <div class="flex flex-col gap-1">
+                    <label for="reg_number" class="text-xs font-semibold text-muted ml-1">Registration Number</label>
+                    <input type="text" id="reg_number" placeholder="e.g. KCA 123A" class="w-full bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary transition-all font-mono uppercase">
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="flex flex-col gap-1">
+                        <label for="v_make" class="text-xs font-semibold text-muted ml-1">Make</label>
+                        <input type="text" id="v_make" placeholder="e.g. Toyota" class="w-full bg-surface border border-divider rounded-xl px-4.5 py-3 text-sm focus:outline-none focus:border-primary transition-all">
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <label for="v_model" class="text-xs font-semibold text-muted ml-1">Model</label>
+                        <input type="text" id="v_model" placeholder="e.g. Corolla" class="w-full bg-surface border border-divider rounded-xl px-4.5 py-3 text-sm focus:outline-none focus:border-primary transition-all">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="flex flex-col gap-1">
+                        <label for="v_year" class="text-xs font-semibold text-muted ml-1">Year</label>
+                        <input type="number" id="v_year" placeholder="e.g. 2022" class="w-full bg-surface border border-divider rounded-xl px-4.5 py-3 text-sm focus:outline-none focus:border-primary transition-all">
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <label for="v_type" class="text-xs font-semibold text-muted ml-1">Vehicle Type</label>
+                        <select id="v_type" class="w-full bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary transition-all">
+                            <option value="private" selected>Private</option>
+                            <option value="commercial">Commercial</option>
+                            <option value="psv">PSV (Public Service)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="flex justify-end gap-3 mt-4">
+                <button type="button" onclick="closeModal()" class="px-6 py-2.5 rounded-full text-muted hover:bg-surface border border-transparent hover:border-divider/50 transition-colors font-medium text-sm">Cancel</button>
+                <button type="submit" class="magnetic-btn bg-primary text-surface px-6 py-2.5 rounded-full font-medium shadow-sm text-sm">Save Client</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function openModal() {
+    const modal = document.getElementById('addClientModal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function closeModal() {
+    const modal = document.getElementById('addClientModal');
+    modal.classList.remove('flex');
+    modal.classList.add('hidden');
+    
+    // Reset Form
+    document.getElementById('addClientForm').reset();
+    document.getElementById('formError').classList.add('hidden');
+    
+    // Clear Red Borders
+    const inputs = ['full_name', 'client_id', 'phone', 'kra_pin', 'email', 'reg_number', 'v_make', 'v_model', 'v_year'];
+    inputs.forEach(id => {
+        const input = document.getElementById(id);
+        if (input) {
+            input.classList.remove('border-red-500');
+            input.classList.add('border-divider');
+        }
+    });
+}
+
+async function submitClientForm(event) {
+    event.preventDefault();
+    
+    const errorDiv = document.getElementById('formError');
+    errorDiv.classList.add('hidden');
+    
+    const full_name = document.getElementById('full_name').value.trim();
+    const client_id = document.getElementById('client_id').value.trim();
+    const phone = document.getElementById('phone').value.trim();
+    const kra_pin = document.getElementById('kra_pin').value.trim();
+    const email = document.getElementById('email').value.trim();
+    
+    // Optional vehicle fields
+    const reg_number = document.getElementById('reg_number').value.trim();
+    const v_make = document.getElementById('v_make').value.trim();
+    const v_model = document.getElementById('v_model').value.trim();
+    const v_year = document.getElementById('v_year').value.trim();
+    const v_type = document.getElementById('v_type').value;
+    
+    // Reset Input Borders
+    const inputs = { full_name, client_id, phone, kra_pin, email };
+    let hasEmpty = false;
+    
+    for (const [id, val] of Object.entries(inputs)) {
+        const input = document.getElementById(id);
+        if (!val) {
+            input.classList.remove('border-divider');
+            input.classList.add('border-red-500');
+            hasEmpty = true;
+        } else {
+            input.classList.remove('border-red-500');
+            input.classList.add('border-divider');
+        }
+    }
+    
+    if (hasEmpty) {
+        errorDiv.innerText = "Please fill in all client fields.";
+        errorDiv.classList.remove('hidden');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/clients/api/add', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token() }}'
+            },
+            body: JSON.stringify({ 
+                full_name, 
+                client_id, 
+                phone, 
+                kra_pin,
+                email,
+                reg_number: reg_number || null,
+                v_make: v_make || null,
+                v_model: v_model || null,
+                v_year: v_year || null,
+                v_type: v_type
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok && result.success) {
+            closeModal();
+            window.location.reload();
+        } else {
+            errorDiv.innerText = result.error || "Failed to add client. Please try again.";
+            errorDiv.classList.remove('hidden');
+            
+            // Highlight fields if database duplicate constraints hit
+            if (result.error) {
+                if (result.error.includes("ID or KRA PIN already exists")) {
+                    document.getElementById('client_id').classList.add('border-red-500');
+                    document.getElementById('kra_pin').classList.add('border-red-500');
+                } else if (result.error.includes("already exists") && result.error.includes("Vehicle")) {
+                    document.getElementById('reg_number').classList.add('border-red-500');
+                }
+            }
+        }
+    } catch (err) {
+        errorDiv.innerText = "Network error. Unable to contact server.";
+        errorDiv.classList.remove('hidden');
+    }
+}
+</script>
+{% endblock %}

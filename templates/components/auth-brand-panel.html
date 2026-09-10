@@ -1,0 +1,20 @@
+<!-- Westlake brand panel — shared by auth screens (login/register).
+     Desktop only; collapses away below lg so mobile sees a clean single column. -->
+<div class="hidden lg:flex flex-col justify-between w-[42%] bg-primary p-10 text-surface relative overflow-hidden">
+    <!-- Subtle cyan/navy decorative accents -->
+    <div class="absolute -top-20 -right-20 w-56 h-56 rounded-full bg-cyan-400/15" aria-hidden="true"></div>
+    <div class="absolute -bottom-24 -left-12 w-64 h-64 rounded-full bg-navy-300/10" aria-hidden="true"></div>
+
+    <img src="{{ url_for('static', filename='img/westlake-icon.png') }}" alt="" aria-hidden="true" class="h-11 w-auto relative z-10">
+
+    <div class="relative z-10">
+        {% block brand_headline %}
+        <h2 class="font-display text-2xl font-bold leading-snug">Policy administration,<br>handled with care.</h2>
+        {% endblock %}
+        <p class="mt-3 text-sm leading-relaxed text-surface/85">
+            Register, track, and renew policies across all your insurance carriers &mdash; in one secure place.
+        </p>
+    </div>
+
+    <p class="relative z-10 text-xs tracking-wide text-surface/70">Westlake Insurance Agency &middot; We do care all the way.</p>
+</div>

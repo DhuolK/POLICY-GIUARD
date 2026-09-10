@@ -1,0 +1,214 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="flex flex-col gap-8">
+    <header class="flex justify-between items-end">
+        <div>
+            <h1 class="text-4xl font-display font-bold text-ink">Vehicles</h1>
+            <p class="text-muted mt-1">Manage all insured vehicles.</p>
+        </div>
+        
+        <div class="flex gap-4">
+            <button onclick="openVehicleModal()" class="magnetic-btn bg-primary text-surface px-6 py-2.5 rounded-full font-medium shadow-sm hover:shadow-md transition-shadow">
+                + Add Vehicle
+            </button>
+        </div>
+    </header>
+
+    <div class="glass rounded-3xl p-6">
+        <form method="GET" class="flex gap-4 mb-6">
+            <select name="type" class="bg-surface border border-divider rounded-full px-6 py-3 text-sm focus:outline-none focus:border-primary transition-colors">
+                <option value="">All Types</option>
+                <option value="private" {% if vehicle_type == 'private' %}selected{% endif %}>Private</option>
+                <option value="commercial" {% if vehicle_type == 'commercial' %}selected{% endif %}>Commercial</option>
+                <option value="psv" {% if vehicle_type == 'psv' %}selected{% endif %}>PSV</option>
+            </select>
+            <input type="text" name="search" value="{{ search_query or '' }}" placeholder="Search by registration, make, model..." class="flex-1 bg-surface border border-divider rounded-full px-6 py-3 text-sm focus:outline-none focus:border-primary transition-colors">
+            <button type="submit" class="magnetic-btn bg-ink text-surface px-6 py-3 rounded-full font-medium">Search</button>
+        </form>
+
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="border-b border-divider/50">
+                        <th class="py-4 px-4 font-medium text-sm text-muted">Registration</th>
+                        <th class="py-4 px-4 font-medium text-sm text-muted">Owner Name</th>
+                        <th class="py-4 px-4 font-medium text-sm text-muted">Make & Model</th>
+                        <th class="py-4 px-4 font-medium text-sm text-muted">Type</th>
+                        <th class="py-4 px-4 font-medium text-sm text-muted">Active Policy</th>
+                        <th class="py-4 px-4 font-medium text-sm text-muted text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="text-sm">
+                    {% for vehicle in vehicles %}
+                    <tr class="border-b border-divider/30 hover:bg-surface/50 transition-colors">
+                        <td class="py-4 px-4 font-mono font-bold">{{ vehicle.registration_number }}</td>
+                        <td class="py-4 px-4 font-medium">
+                            <a href="/clients/{{ vehicle.owner_id }}" class="hover:underline text-primary font-medium">{{ vehicle.owner_name }}</a>
+                        </td>
+                        <td class="py-4 px-4">{{ vehicle.make }} {{ vehicle.model }} ({{ vehicle.year }})</td>
+                        <td class="py-4 px-4 capitalize">{{ vehicle.vehicle_type }}</td>
+                        <td class="py-4 px-4">{{ vehicle.active_policy }}</td>
+                        <td class="py-4 px-4 text-right">
+                            <a href="/clients/{{ vehicle.owner_id }}" class="text-primary hover:underline font-medium">View Owner</a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="py-8 text-center text-muted">No vehicles found matching your criteria.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Add Vehicle Modal -->
+<div id="addVehicleModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-ink/50 backdrop-blur-sm overflow-y-auto py-10">
+    <div class="glass rounded-3xl p-8 max-w-md w-full mx-4 shadow-xl border border-divider/60 my-auto">
+        <h2 class="text-2xl font-display font-bold text-ink mb-6">Add New Vehicle</h2>
+        <form id="addVehicleForm" onsubmit="submitVehicleForm(event)" class="flex flex-col gap-4">
+            <div id="vehicleFormError" class="hidden text-red-500 text-sm mb-2 font-medium bg-red-50 p-3 rounded-xl border border-red-200"></div>
+            
+            <div class="flex flex-col gap-1">
+                <label for="v_owner_id" class="text-xs font-semibold text-muted ml-1">Owner / Client</label>
+                <select id="v_owner_id" required class="w-full bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary transition-all">
+                    <option value="" disabled selected>Select Owner...</option>
+                    {% for c in clients %}
+                    <option value="{{ c._id }}">{{ c.full_name }} ({{ c.client_id }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="flex flex-col gap-1">
+                <label for="v_reg_number" class="text-xs font-semibold text-muted ml-1">Registration Number</label>
+                <input type="text" id="v_reg_number" required placeholder="e.g. KCA 123A" class="w-full bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary font-mono uppercase transition-all">
+            </div>
+            
+            <div class="grid grid-cols-2 gap-3">
+                <div class="flex flex-col gap-1">
+                    <label for="v_add_make" class="text-xs font-semibold text-muted ml-1">Make</label>
+                    <input type="text" id="v_add_make" required placeholder="e.g. Toyota" class="w-full bg-surface border border-divider rounded-xl px-4.5 py-3 text-sm focus:outline-none focus:border-primary transition-all">
+                </div>
+                <div class="flex flex-col gap-1">
+                    <label for="v_add_model" class="text-xs font-semibold text-muted ml-1">Model</label>
+                    <input type="text" id="v_add_model" required placeholder="e.g. Corolla" class="w-full bg-surface border border-divider rounded-xl px-4.5 py-3 text-sm focus:outline-none focus:border-primary transition-all">
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-3">
+                <div class="flex flex-col gap-1">
+                    <label for="v_add_year" class="text-xs font-semibold text-muted ml-1">Year</label>
+                    <input type="number" id="v_add_year" required placeholder="e.g. 2022" class="w-full bg-surface border border-divider rounded-xl px-4.5 py-3 text-sm focus:outline-none focus:border-primary transition-all">
+                </div>
+                <div class="flex flex-col gap-1">
+                    <label for="v_add_type" class="text-xs font-semibold text-muted ml-1">Vehicle Type</label>
+                    <select id="v_add_type" class="w-full bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary transition-all">
+                        <option value="private" selected>Private</option>
+                        <option value="commercial">Commercial</option>
+                        <option value="psv">PSV (Public Service)</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="flex justify-end gap-3 mt-4">
+                <button type="button" onclick="closeVehicleModal()" class="px-6 py-2.5 rounded-full text-muted hover:bg-surface border border-transparent hover:border-divider/50 transition-colors font-medium text-sm">Cancel</button>
+                <button type="submit" class="magnetic-btn bg-primary text-surface px-6 py-2.5 rounded-full font-medium shadow-sm text-sm">Save Vehicle</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function openVehicleModal() {
+    const modal = document.getElementById('addVehicleModal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function closeVehicleModal() {
+    const modal = document.getElementById('addVehicleModal');
+    modal.classList.remove('flex');
+    modal.classList.add('hidden');
+    
+    document.getElementById('addVehicleForm').reset();
+    document.getElementById('vehicleFormError').classList.add('hidden');
+    
+    const inputs = ['v_owner_id', 'v_reg_number', 'v_add_make', 'v_add_model', 'v_add_year'];
+    inputs.forEach(id => {
+        const input = document.getElementById(id);
+        if (input) {
+            input.classList.remove('border-red-500');
+            input.classList.add('border-divider');
+        }
+    });
+}
+
+async function submitVehicleForm(event) {
+    event.preventDefault();
+    
+    const errorDiv = document.getElementById('vehicleFormError');
+    errorDiv.classList.add('hidden');
+    
+    const owner_id = document.getElementById('v_owner_id').value;
+    const registration_number = document.getElementById('v_reg_number').value.trim();
+    const make = document.getElementById('v_add_make').value.trim();
+    const model = document.getElementById('v_add_model').value.trim();
+    const year = document.getElementById('v_add_year').value.trim();
+    const vehicle_type = document.getElementById('v_add_type').value;
+    
+    const inputs = { v_owner_id: owner_id, v_reg_number: registration_number, v_add_make: make, v_add_model: model, v_add_year: year };
+    let hasEmpty = false;
+    
+    for (const [id, val] of Object.entries(inputs)) {
+        const input = document.getElementById(id);
+        if (!val) {
+            input.classList.remove('border-divider');
+            input.classList.add('border-red-500');
+            hasEmpty = true;
+        } else {
+            input.classList.remove('border-red-500');
+            input.classList.add('border-divider');
+        }
+    }
+    
+    if (hasEmpty) {
+        errorDiv.innerText = "Please fill in all vehicle fields.";
+        errorDiv.classList.remove('hidden');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/vehicles/api/add', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token() }}'
+            },
+            body: JSON.stringify({
+                owner_id: owner_id,
+                registration_number: registration_number,
+                make: make,
+                model: model,
+                year: year,
+                vehicle_type: vehicle_type
+            })
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            window.location.reload();
+        } else {
+            errorDiv.innerText = data.error || "An unexpected error occurred.";
+            errorDiv.classList.remove('hidden');
+        }
+    } catch (err) {
+        errorDiv.innerText = "Failed to submit request. Please try again.";
+        errorDiv.classList.remove('hidden');
+    }
+}
+</script>
+{% endblock %}

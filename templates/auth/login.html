@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="flex items-center justify-center min-h-[70vh]">
+    <div class="w-full max-w-4xl rounded-4xl shadow-xl overflow-hidden flex bg-surface border border-divider/60">
+
+        <!-- Westlake brand panel (desktop) -->
+        {% include 'components/auth-brand-panel.html' %}
+
+        <!-- Sign-in form -->
+        <div class="flex-1 px-8 py-12 md:px-12 flex flex-col justify-center">
+            <div class="text-center mb-8">
+                <img src="{{ url_for('static', filename='img/westlake-logo.png') }}" alt="Westlake Insurance Agency" class="h-14 w-auto mx-auto mb-6">
+                <h1 class="text-3xl font-display font-bold mb-2">Welcome Back</h1>
+                <p class="text-muted text-sm">Sign in to your Westlake Policy Guard account</p>
+            </div>
+
+            <form method="POST" action="{{ url_for('auth.login') }}" class="flex flex-col gap-5">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+                <div class="flex flex-col gap-1.5">
+                    <label for="email" class="text-sm font-medium text-ink">Email Address</label>
+                    <input type="email" id="email" name="email" required
+                           class="w-full bg-surface border border-divider rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                           placeholder="worker@example.com">
+                </div>
+
+                <div class="flex flex-col gap-1.5">
+                    <label for="password" class="text-sm font-medium text-ink">Password</label>
+                    <input type="password" id="password" name="password" required
+                           class="w-full bg-surface border border-divider rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                           placeholder="••••••••">
+                </div>
+
+                <button type="submit" class="magnetic-btn w-full bg-primary text-surface font-semibold py-3 rounded-xl mt-4 hover:bg-primary-dark transition-colors">
+                    Sign In
+                </button>
+            </form>
+
+            <div class="mt-6 text-center text-sm text-muted">
+                Need access? Contact your Westlake administrator.
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

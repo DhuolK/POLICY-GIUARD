@@ -1,0 +1,156 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="flex flex-col gap-6">
+    <header class="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 mb-4">
+        <div>
+            <a href="{{ url_for('policies.list') }}" class="text-primary hover:underline text-sm font-medium flex items-center gap-1 mb-2">
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="19" y1="12" x2="5" y2="12"></line>
+                    <polyline points="12 19 5 12 12 5"></polyline>
+                </svg>
+                Back to Policies
+            </a>
+            <h1 class="text-3xl font-display font-bold text-ink">Expiring Policies & Reminders</h1>
+            <p class="text-muted mt-1">Policies expiring within the next 7 days — SMS reminders are sent 3 days before expiry</p>
+        </div>
+        
+
+    </header>
+
+    <!-- Expiration Summary Dashboard -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-2">
+        {% set total_expiring = policies|length %}
+        {% set ns_count = namespace(not_sent=0, sent=0) %}
+        {% for p in policies %}
+            {% if p.reminder_status == 'Not Sent' %}
+                {% set ns_count.not_sent = ns_count.not_sent + 1 %}
+            {% else %}
+                {% set ns_count.sent = ns_count.sent + 1 %}
+            {% endif %}
+        {% endfor %}
+        <div class="glass p-6 rounded-3xl">
+            <span class="text-muted text-xs block uppercase font-semibold tracking-wider mb-1">Total Expiring Soon</span>
+            <span class="text-3xl font-display font-bold text-ink">{{ total_expiring }}</span>
+            <span class="text-xs text-muted block mt-1">Active policies expiring in ≤ 7 days</span>
+        </div>
+        <div class="glass p-6 rounded-3xl">
+            <span class="text-muted text-xs block uppercase font-semibold tracking-wider mb-1">Reminders Pending</span>
+            <span class="text-3xl font-display font-bold text-accent">{{ ns_count.not_sent }}</span>
+            <span class="text-xs text-muted block mt-1">Policies requiring notification delivery</span>
+        </div>
+        <div class="glass p-6 rounded-3xl">
+            <span class="text-muted text-xs block uppercase font-semibold tracking-wider mb-1">Reminders Dispatched</span>
+            <span class="text-3xl font-display font-bold text-primary">{{ ns_count.sent }}</span>
+            <span class="text-xs text-muted block mt-1">Clients successfully notified of upcoming expiry</span>
+        </div>
+    </div>
+
+    <!-- Expiring Policies Table -->
+    <div class="glass rounded-3xl p-1 overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="border-b border-divider/50 bg-surface/30">
+                        <th class="py-4 px-6 font-medium text-sm text-muted">Policy Number</th>
+                        <th class="py-4 px-6 font-medium text-sm text-muted">Client / Policyholder</th>
+                        <th class="py-4 px-6 font-medium text-sm text-muted">Vehicle Plate</th>
+                        <th class="py-4 px-6 font-medium text-sm text-muted">Expiry Date</th>
+                        <th class="py-4 px-6 font-medium text-sm text-muted">Days Remaining</th>
+                        <th class="py-4 px-6 font-medium text-sm text-muted">Reminder Status</th>
+                        <th class="py-4 px-6 font-medium text-sm text-muted text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="text-sm">
+                    {% for policy in policies %}
+                    <tr class="border-b border-divider/30 hover:bg-surface/50 transition-colors">
+                        <td class="py-4 px-6 font-mono font-bold text-primary">
+                            <a href="{{ url_for('policies.detail', policy_id=policy._id) }}" class="hover:underline">
+                                {{ policy.policy_number }}
+                            </a>
+                        </td>
+                        <td class="py-4 px-6">
+                            {% if policy.client_id %}
+                                <a href="{{ url_for('clients.profile', client_id=policy.client_id) }}" class="font-semibold text-ink hover:underline">
+                                    {{ policy.client_name }}
+                                </a>
+                            {% else %}
+                                <span class="font-semibold text-muted">{{ policy.client_name }}</span>
+                            {% endif %}
+                            <span class="text-xs text-muted block">{{ policy.client_email or 'No email' }}</span>
+                        </td>
+                        <td class="py-4 px-6 font-mono">
+                            <span class="bg-surface border border-divider/60 px-2 py-0.5 rounded-lg font-bold text-ink">
+                                {{ policy.vehicle_reg }}
+                            </span>
+                        </td>
+                        <td class="py-4 px-6 text-muted font-mono">{{ policy.expiry_date }}</td>
+                        <td class="py-4 px-6">
+                            {% if policy.days_remaining <= 3 %}
+                                <span class="px-3 py-1 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-600 border border-rose-500/20 font-mono">
+                                    {{ policy.days_remaining }} Days Left
+                                </span>
+                            {% else %}
+                                <span class="px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-600 border border-amber-500/20 font-mono">
+                                    {{ policy.days_remaining }} Days Left
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td class="py-4 px-6">
+                            {% if policy.reminder_status == 'sent' %}
+                                <div class="flex flex-col">
+                                    <span class="px-3 py-1 rounded-full text-xs font-semibold bg-green-500/10 text-green-600 border border-green-500/20 self-start">
+                                        ✓ Sent via Email
+                                    </span>
+                                    {% if policy.reminder_sent_at %}
+                                        <span class="text-[10px] text-muted font-mono mt-1 pl-1">
+                                            {{ policy.reminder_sent_at.strftime('%Y-%m-%d %H:%M') if hasattr(policy.reminder_sent_at, 'strftime') else policy.reminder_sent_at }}
+                                        </span>
+                                    {% endif %}
+                                </div>
+                            {% else %}
+                                <span class="px-3 py-1 rounded-full text-xs font-semibold bg-muted/20 text-muted border border-divider">
+                                    Not Sent
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td class="py-4 px-6 text-right">
+                            <form method="POST" action="{{ url_for('policies.trigger_manual_reminder', policy_id=policy._id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                <button type="submit" class="magnetic-btn border border-divider hover:bg-primary hover:text-surface text-ink text-xs font-semibold px-4 py-1.5 rounded-xl transition-all">
+                                    {% if policy.reminder_status == 'sent' %}
+                                        Resend Reminder
+                                    {% else %}
+                                        Send Reminder
+                                    {% endif %}
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="py-12 text-center text-muted italic">
+                            No policies expiring in the next 7 days. Check back closer to renewal dates.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Stagger table rows animations
+    gsap.from("tbody tr", {
+        y: 20,
+        opacity: 0,
+        duration: 0.5,
+        stagger: 0.08,
+        ease: "power2.out",
+        delay: 0.2
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,92 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="flex flex-col gap-6 max-w-3xl mx-auto">
+    <header class="mb-4">
+        <a href="{{ url_for('policies.detail', policy_id=policy._id) }}" class="text-primary hover:underline text-sm font-medium flex items-center gap-1 mb-4">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="19" y1="12" x2="5" y2="12"></line>
+                <polyline points="12 19 5 12 12 5"></polyline>
+            </svg>
+            Back to Policy Details
+        </a>
+        
+        <h1 class="text-3xl font-display font-bold text-ink">
+            Edit Policy {{ policy.policy_number }}
+        </h1>
+        <p class="text-muted mt-1">Modify the draft policy's details and save the changes</p>
+    </header>
+
+    <div class="glass rounded-3xl p-8 relative overflow-hidden shadow-sm">
+        <div class="noise-overlay"></div>
+        
+        <form method="POST" action="" class="relative z-10 flex flex-col gap-6">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <!-- Read-only Display for Policyholder Name -->
+            <div class="flex flex-col gap-1.5">
+                <label class="text-sm font-medium text-ink">Policyholder Name</label>
+                <input type="text" value="{{ client.full_name if client else (policy.client_name if policy.client_name else 'N/A') }}" readonly
+                       class="w-full bg-surface border border-divider rounded-xl px-4 py-3 text-muted cursor-not-allowed" style="opacity: 0.85;">
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Policy Number -->
+                <div class="flex flex-col gap-1.5">
+                    <label for="policy_number" class="text-sm font-medium text-ink">Policy Number</label>
+                    <input type="text" id="policy_number" name="policy_number" required value="{{ policy.policy_number }}"
+                           class="w-full bg-surface border border-divider rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all font-mono uppercase"
+                           placeholder="e.g. PG-2026-00001">
+                </div>
+
+                <!-- Policy Type Selection -->
+                <div class="flex flex-col gap-1.5">
+                    <label for="policy_type" class="text-sm font-medium text-ink">Policy Type</label>
+                    <select id="policy_type" name="policy_type" required
+                            class="w-full bg-surface border border-divider rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all">
+                        <option value="" disabled>Select coverage type...</option>
+                        <option value="comprehensive" {% if policy.policy_type == 'comprehensive' %}selected{% endif %}>Comprehensive</option>
+                        <option value="third_party" {% if policy.policy_type == 'third_party' %}selected{% endif %}>Third Party</option>
+                        <option value="fire_theft" {% if policy.policy_type == 'fire_theft' or policy.policy_type == 'third_party_fire_theft' %}selected{% endif %}>Third Party, Fire & Theft</option>
+                        <option value="psv" {% if policy.policy_type == 'psv' %}selected{% endif %}>PSV</option>
+                    </select>
+                </div>
+
+                <!-- Effective Date -->
+                <div class="flex flex-col gap-1.5">
+                    <label for="effective_date" class="text-sm font-medium text-ink">Effective Date</label>
+                    <input type="date" id="effective_date" name="effective_date" required value="{{ policy.effective_date }}"
+                           class="w-full bg-surface border border-divider rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all">
+                </div>
+
+                <!-- Expiry Date -->
+                <div class="flex flex-col gap-1.5">
+                    <label for="expiry_date" class="text-sm font-medium text-ink">Expiry Date</label>
+                    <input type="date" id="expiry_date" name="expiry_date" required value="{{ policy.expiry_date }}"
+                           class="w-full bg-surface border border-divider rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all">
+                </div>
+            </div>
+
+            <!-- Premium Amount -->
+            <div class="flex flex-col gap-1.5">
+                <label for="premium" class="text-sm font-medium text-ink">Premium Amount (KES)</label>
+                <div class="relative">
+                    <span class="absolute left-4 top-1/2 -translate-y-1/2 text-muted font-medium">KES</span>
+                    <input type="number" id="premium" name="premium" required step="0.01" value="{{ policy.premium_amount }}"
+                           class="w-full bg-surface border border-divider rounded-xl pl-14 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                           placeholder="0.00">
+                </div>
+            </div>
+            
+            <!-- Action Buttons -->
+            <div class="flex justify-end gap-4 mt-4">
+                <a href="{{ url_for('policies.detail', policy_id=policy._id) }}" class="px-6 py-3 rounded-xl font-medium text-muted hover:text-ink transition-colors">
+                    Cancel
+                </a>
+                <button type="submit" class="magnetic-btn bg-primary text-surface font-semibold px-8 py-3 rounded-xl shadow-sm">
+                    Save Changes
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

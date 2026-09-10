@@ -1,0 +1,413 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="flex flex-col gap-8">
+    <header class="flex justify-between items-end">
+        <div>
+            <h1 class="text-4xl font-display font-bold text-ink">Dashboard</h1>
+            <p class="text-muted mt-1">Welcome back, {{ current_user.full_name }} ({{ current_user.role|title }})</p>
+        </div>
+        
+        {% if current_user.role in ['admin', 'worker'] %}
+        <div class="flex gap-4">
+            <a href="{{ url_for('policies.new') }}" class="magnetic-btn bg-primary text-surface px-6 py-2.5 rounded-full font-medium shadow-sm hover:shadow-md transition-shadow">
+                + Add Issued Policy
+            </a>
+        </div>
+        {% else %}
+        <div class="flex gap-4">
+            <a href="{{ url_for('claims.new') }}" class="magnetic-btn bg-accent text-surface px-6 py-2.5 rounded-full font-medium shadow-sm hover:shadow-md transition-shadow">
+                File a Claim
+            </a>
+        </div>
+        {% endif %}
+    </header>
+
+    {% if current_user.role == 'admin' %}
+    <!-- Stats Grid (Admin Only) -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <!-- Stat Card 1 -->
+        <div onclick="showPaymentsModal('receivable')" class="glass p-6 rounded-3xl lift-on-hover cursor-pointer border border-transparent hover:border-primary/20 transition-all select-none">
+            <div class="w-12 h-12 bg-primary/10 text-primary rounded-2xl flex items-center justify-center mb-4">
+                <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                </svg>
+            </div>
+            <p class="text-muted text-sm font-medium flex justify-between items-center">
+                <span>Total Receivable</span>
+                <span class="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-semibold">View Details</span>
+            </p>
+            <p class="text-3xl font-display font-bold mt-1 text-ink">KSh <span class="count-up">{{ stats.total_receivable|int }}</span></p>
+        </div>
+        
+        <!-- Stat Card 2 -->
+        <div onclick="showPaymentsModal('overdue')" class="glass p-6 rounded-3xl lift-on-hover cursor-pointer border border-transparent hover:border-accent/20 transition-all select-none">
+            <div class="w-12 h-12 bg-accent/10 text-accent rounded-2xl flex items-center justify-center mb-4">
+                <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <polyline points="12 6 12 12 16 14"></polyline>
+                </svg>
+            </div>
+            <p class="text-muted text-sm font-medium flex justify-between items-center">
+                <span>Total Overdue</span>
+                <span class="text-xs bg-accent/10 text-accent px-2 py-0.5 rounded-full font-semibold">View Details</span>
+            </p>
+            <p class="text-3xl font-display font-bold mt-1 text-ink">KSh <span class="count-up">{{ stats.total_overdue|int }}</span></p>
+        </div>
+        
+        <!-- Stat Card 3 -->
+        <div onclick="showPaymentsModal('paid')" class="glass p-6 rounded-3xl lift-on-hover cursor-pointer border border-transparent hover:border-green-500/20 transition-all select-none">
+            <div class="w-12 h-12 bg-green-500/10 text-green-600 rounded-2xl flex items-center justify-center mb-4">
+                <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                    <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                </svg>
+            </div>
+            <p class="text-muted text-sm font-medium flex justify-between items-center">
+                <span>Completed Payments</span>
+                <span class="text-xs bg-green-500/10 text-green-600 px-2 py-0.5 rounded-full font-semibold">View Details</span>
+            </p>
+            <p class="text-3xl font-display font-bold mt-1 text-ink">KSh <span class="count-up">{{ stats.total_transactions|int }}</span></p>
+        </div>
+    </div>
+
+    <!-- Recent Activity Section (Admin Only) -->
+    <section class="mt-4">
+        <h2 class="text-xl font-display font-semibold mb-6">Recent Activity</h2>
+        <div class="glass rounded-3xl p-1 overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="border-b border-divider/50">
+                            <th class="py-4 px-6 font-medium text-sm text-muted">ID</th>
+                            <th class="py-4 px-6 font-medium text-sm text-muted">Type</th>
+                            <th class="py-4 px-6 font-medium text-sm text-muted">Status</th>
+                            <th class="py-4 px-6 font-medium text-sm text-muted">Date</th>
+                            <th class="py-4 px-6 font-medium text-sm text-muted text-right">Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody class="text-sm">
+                        {% for payment in recent_payments %}
+                        <tr class="border-b border-divider/30 hover:bg-surface/50 transition-colors">
+                            <td class="py-4 px-6 font-mono">{{ payment._id[-6:]|upper }}</td>
+                            <td class="py-4 px-6 font-medium">Payment - {{ payment.description }}</td>
+                            <td class="py-4 px-6">
+                                <span class="px-3 py-1 rounded-full text-xs font-medium bg-green-500/10 text-green-600">{{ payment.status|title }}</span>
+                            </td>
+                            <td class="py-4 px-6 text-muted">{{ payment.payment_date.strftime('%b %d, %Y') if payment.payment_date else '' }}</td>
+                            <td class="py-4 px-6 text-right font-medium text-ink">
+                                KSh {{ "{:,.2f}".format(payment.amount) if payment.amount else '0.00' }}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="5" class="py-8 text-center text-muted">No recent transactions.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+    {% else %}
+    <!-- Worker Dashboard Display -->
+    <div class="glass rounded-3xl p-8 shadow-sm flex flex-col items-center justify-center text-center py-16 mt-8">
+        <div class="w-16 h-16 bg-primary/10 text-primary rounded-full flex items-center justify-center mb-4">
+            <svg class="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                <circle cx="9" cy="7" r="4"></circle>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+            </svg>
+        </div>
+        <h2 class="text-2xl font-display font-bold text-ink mb-2">Worker Operations Center</h2>
+        <p class="text-muted max-w-lg mb-8">Welcome to your workspace. Use the navigation menu above to manage your clients, draft policies, and file claims.</p>
+        <div class="flex gap-4">
+            <a href="{{ url_for('clients.index') }}" class="magnetic-btn bg-surface border border-divider text-ink px-6 py-2.5 rounded-full font-medium shadow-sm hover:shadow-md transition-shadow">
+                View Clients
+            </a>
+            <a href="{{ url_for('policies.new') }}" class="magnetic-btn bg-primary text-surface px-6 py-2.5 rounded-full font-medium shadow-sm hover:shadow-md transition-shadow">
+                Draft New Policy
+            </a>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Payments Details Modal -->
+<div id="paymentsDetailsModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-ink/50 backdrop-blur-sm overflow-y-auto py-10">
+    <div class="glass rounded-3xl p-8 max-w-5xl w-full mx-4 shadow-2xl border border-divider/60 my-auto flex flex-col gap-6">
+        <div class="flex justify-between items-start">
+            <div>
+                <h2 id="modalTitle" class="text-3xl font-display font-bold text-ink">Payment Details</h2>
+                <p id="modalSubtitle" class="text-muted mt-1">Listing all matching records</p>
+            </div>
+            <button onclick="closePaymentsModal()" class="w-10 h-10 rounded-full border border-divider flex items-center justify-center text-muted hover:text-ink hover:bg-surface transition-all">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+
+        <!-- Total Counter Summary inside Modal -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="bg-surface/50 border border-divider rounded-2xl p-4 flex flex-col justify-center">
+                <p class="text-xs font-semibold text-muted uppercase tracking-wider">Filtered Count</p>
+                <p id="modalCount" class="text-2xl font-bold text-ink mt-1 font-mono">0 payments</p>
+            </div>
+            <div class="bg-surface/50 border border-divider rounded-2xl p-4 flex flex-col justify-center col-span-2">
+                <p class="text-xs font-semibold text-muted uppercase tracking-wider">Sum of Listed Payments</p>
+                <p id="modalSum" class="text-2xl font-bold text-primary mt-1 font-display">KSh 0.00</p>
+            </div>
+        </div>
+
+        <!-- Search & Filter Controls -->
+        <div class="flex gap-4">
+            <input type="text" id="modalSearch" oninput="filterModalTable()" placeholder="Filter list by client name, policy number, description, vehicle..." class="flex-1 bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary transition-all">
+        </div>
+
+        <!-- Detailed Table -->
+        <div class="overflow-x-auto border border-divider/50 rounded-2xl max-h-[380px] overflow-y-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-primary/5 border-b border-divider/50 text-sm sticky top-0 bg-background z-10">
+                        <th class="py-3.5 px-4 font-semibold text-ink">Client Details</th>
+                        <th class="py-3.5 px-4 font-semibold text-ink">Policy & Vehicle</th>
+                        <th class="py-3.5 px-4 font-semibold text-ink">Payment Info</th>
+                        <th class="py-3.5 px-4 font-semibold text-ink text-right">Amount</th>
+                    </tr>
+                </thead>
+                <tbody id="modalTableBody" class="text-sm">
+                    <!-- Rows loaded dynamically -->
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Close btn -->
+        <div class="flex justify-end">
+            <button onclick="closePaymentsModal()" class="magnetic-btn bg-ink text-surface px-8 py-2.5 rounded-full font-medium text-sm">Close View</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Animate stats counting up
+    const counters = document.querySelectorAll('.count-up');
+    counters.forEach(counter => {
+        const target = parseInt(counter.innerText);
+        counter.innerText = '0';
+        
+        gsap.to(counter, {
+            innerHTML: target,
+            duration: 2,
+            snap: { innerHTML: 1 },
+            ease: "power2.out",
+            scrollTrigger: {
+                trigger: counter,
+                start: "top 90%"
+            }
+        });
+    });
+
+    // Stagger table rows
+    gsap.from("tbody tr", {
+        y: 20,
+        opacity: 0,
+        duration: 0.5,
+        stagger: 0.1,
+        ease: "power2.out",
+        delay: 0.4
+    });
+
+    // Modal details Logic
+    let currentModalPayments = [];
+
+    function showPaymentsModal(status) {
+        const modal = document.getElementById('paymentsDetailsModal');
+        const titleEl = document.getElementById('modalTitle');
+        const subtitleEl = document.getElementById('modalSubtitle');
+        const tableBody = document.getElementById('modalTableBody');
+        const countEl = document.getElementById('modalCount');
+        const sumEl = document.getElementById('modalSum');
+        const searchEl = document.getElementById('modalSearch');
+
+        searchEl.value = ''; // clear search input
+
+        // Update title and visual identity depending on status
+        let statusLabel = '';
+        let statusClass = '';
+        if (status === 'receivable') {
+            statusLabel = 'Receivable Payments';
+            statusClass = 'text-primary';
+        } else if (status === 'overdue') {
+            statusLabel = 'Overdue Payments';
+            statusClass = 'text-accent';
+        } else if (status === 'paid') {
+            statusLabel = 'Completed Payments';
+            statusClass = 'text-green-600';
+        }
+
+        titleEl.innerHTML = statusLabel;
+        titleEl.className = `text-3xl font-display font-bold ${statusClass}`;
+        subtitleEl.innerText = `Viewing all current records marked as "${status}"`;
+
+        // Show modal with a backdrop animation trigger
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+
+        // Show Loading state
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="4" class="py-12 text-center text-muted">
+                    <div class="flex flex-col items-center gap-3 justify-center">
+                        <svg class="animate-spin w-8 h-8 text-primary" viewBox="0 0 24 24" fill="none">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                        </svg>
+                        <span class="font-medium text-sm">Fetching and reconciling data...</span>
+                    </div>
+                </td>
+            </tr>
+        `;
+
+        // Fetch from Flask blueprint API
+        fetch(`/api/payments/${status}`)
+            .then(response => {
+                if (!response.ok) throw new Error('Network response error');
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    currentModalPayments = data.payments;
+                    renderModalPayments(currentModalPayments);
+                } else {
+                    tableBody.innerHTML = `
+                        <tr>
+                            <td colspan="4" class="py-8 text-center text-red-500 font-medium">
+                                Error loading payments: ${data.error}
+                            </td>
+                        </tr>
+                    `;
+                }
+            })
+            .catch(err => {
+                tableBody.innerHTML = `
+                    <tr>
+                        <td colspan="4" class="py-8 text-center text-red-500 font-medium">
+                            Failed to fetch financial details. Please verify connections.
+                        </td>
+                    </tr>
+                `;
+            });
+    }
+
+    function renderModalPayments(payments) {
+        const tableBody = document.getElementById('modalTableBody');
+        const countEl = document.getElementById('modalCount');
+        const sumEl = document.getElementById('modalSum');
+
+        if (payments.length === 0) {
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="4" class="py-12 text-center text-muted italic">
+                        No matching payment records found.
+                    </td>
+                </tr>
+            `;
+            countEl.innerText = '0 payments';
+            sumEl.innerText = 'KSh 0.00';
+            return;
+        }
+
+        let sum = 0;
+        let html = '';
+
+        payments.forEach(p => {
+            sum += p.amount;
+            const formattedAmount = new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format(p.amount);
+            
+            // Client details block
+            const clientBlock = `
+                <div class="flex flex-col gap-0.5">
+                    <span class="font-bold text-ink">${p.client_name}</span>
+                    <span class="text-xs font-mono text-muted/90">${p.client_uid}</span>
+                    <span class="text-xs text-muted/75">${p.client_email} | ${p.client_phone}</span>
+                </div>
+            `;
+
+            // Policy & Vehicle block
+            const policyBlock = `
+                <div class="flex flex-col gap-0.5">
+                    <span class="inline-block bg-primary/10 text-primary px-2.5 py-0.5 rounded-md text-xs font-mono font-bold w-max">${p.policy_number}</span>
+                    <span class="text-xs font-medium text-ink capitalize mt-0.5">${p.policy_type.replace('_', ' ')}</span>
+                    <span class="text-xs text-muted">${p.vehicle_reg} (${p.vehicle_make} ${p.vehicle_model})</span>
+                </div>
+            `;
+
+            // Payment Info block
+            const paymentBlock = `
+                <div class="flex flex-col gap-0.5">
+                    <span class="font-medium text-ink">${p.description}</span>
+                    <span class="text-xs text-muted">Due/Paid: ${p.payment_date_str}</span>
+                </div>
+            `;
+
+            // Row Template
+            html += `
+                <tr class="border-b border-divider/30 hover:bg-surface/50 transition-colors">
+                    <td class="py-4 px-4">${clientBlock}</td>
+                    <td class="py-4 px-4">${policyBlock}</td>
+                    <td class="py-4 px-4">${paymentBlock}</td>
+                    <td class="py-4 px-4 text-right font-bold text-ink font-mono">${formattedAmount}</td>
+                </tr>
+            `;
+        });
+
+        tableBody.innerHTML = html;
+        countEl.innerText = `${payments.length} payment${payments.length !== 1 ? 's' : ''}`;
+        sumEl.innerText = new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format(sum);
+    }
+
+    function filterModalTable() {
+        const query = document.getElementById('modalSearch').value.toLowerCase().trim();
+        if (!query) {
+            renderModalPayments(currentModalPayments);
+            return;
+        }
+
+        const filtered = currentModalPayments.filter(p => {
+            const name = (p.client_name || '').toLowerCase();
+            const email = (p.client_email || '').toLowerCase();
+            const phone = (p.client_phone || '').toLowerCase();
+            const uid = (p.client_uid || '').toLowerCase();
+            const pnum = (p.policy_number || '').toLowerCase();
+            const ptype = (p.policy_type || '').toLowerCase();
+            const reg = (p.vehicle_reg || '').toLowerCase();
+            const make = (p.vehicle_make || '').toLowerCase();
+            const model = (p.vehicle_model || '').toLowerCase();
+            const desc = (p.description || '').toLowerCase();
+
+            return name.includes(query) || 
+                   email.includes(query) || 
+                   phone.includes(query) || 
+                   uid.includes(query) || 
+                   pnum.includes(query) || 
+                   ptype.includes(query) || 
+                   reg.includes(query) || 
+                   make.includes(query) || 
+                   model.includes(query) || 
+                   desc.includes(query);
+        });
+
+        renderModalPayments(filtered);
+    }
+
+    function closePaymentsModal() {
+        const modal = document.getElementById('paymentsDetailsModal');
+        modal.classList.remove('flex');
+        modal.classList.add('hidden');
+    }
+</script>
+{% endblock %}

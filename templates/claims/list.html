@@ -1,0 +1,107 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="flex flex-col gap-6">
+    <header class="flex justify-between items-end mb-4">
+        <div>
+            <h1 class="text-3xl font-display font-bold text-ink">Claims</h1>
+            <p class="text-muted mt-1">Manage all insurance claims</p>
+        </div>
+        
+        <div class="flex gap-4">
+            <a href="{{ url_for('claims.new') }}" class="magnetic-btn bg-accent text-surface px-6 py-2.5 rounded-full font-medium shadow-sm hover:shadow-md transition-shadow">
+                File a Claim
+            </a>
+        </div>
+    </header>
+
+    <div class="glass rounded-3xl p-6">
+        <form method="GET" class="flex gap-4 mb-6">
+            <input type="text" name="search" value="{{ search_query or '' }}" placeholder="Search by claim number or status..." class="flex-1 bg-surface border border-divider rounded-full px-6 py-3 text-sm focus:outline-none focus:border-primary transition-colors">
+            <button type="submit" class="magnetic-btn bg-ink text-surface px-6 py-3 rounded-full font-medium">Search</button>
+        </form>
+
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="border-b border-divider/50 bg-surface/30">
+                        <th class="py-4 px-6 font-medium text-sm text-muted">Claim Number</th>
+                        <th class="py-4 px-6 font-medium text-sm text-muted">Client</th>
+                        <th class="py-4 px-6 font-medium text-sm text-muted">Vehicle / Policy</th>
+                        <th class="py-4 px-6 font-medium text-sm text-muted">Est. Payout (KSh)</th>
+                        <th class="py-4 px-6 font-medium text-sm text-muted">Fraud Assessment</th>
+                        <th class="py-4 px-6 font-medium text-sm text-muted">Status</th>
+                        <th class="py-4 px-6 font-medium text-sm text-muted text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="text-sm">
+                    {% for claim in claims %}
+                    <tr class="border-b border-divider/30 hover:bg-surface/50 transition-colors">
+                        <td class="py-4 px-6 font-mono font-medium text-ink">{{ claim.claim_number }}</td>
+                        <td class="py-4 px-6">{{ claim.client_name }}</td>
+                        <td class="py-4 px-6 font-mono text-xs">
+                            <div>{{ claim.accident_vehicle_reg or 'N/A' }}</div>
+                            <div class="text-muted text-[11px]">{{ claim.policy_number }}</div>
+                        </td>
+                        <td class="py-4 px-6 font-semibold text-primary">
+                            KSh {{ "{:,.2f}".format(claim.estimated_payout or 0) }}
+                        </td>
+                        <td class="py-4 px-6">
+                            {% if claim.fraud_level == 'high_risk' %}
+                                <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-500/10 text-rose-600 border border-rose-500/20">
+                                    ⚠️ High Risk ({{ claim.fraud_score or 0 }})
+                                </span>
+                            {% elif claim.fraud_level == 'medium_review' %}
+                                <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-500/10 text-amber-600 border border-amber-500/20">
+                                    ⚡ Review ({{ claim.fraud_score or 0 }})
+                                </span>
+                            {% else %}
+                                <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-600">
+                                    ✓ Low Risk ({{ claim.fraud_score or 0 }})
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td class="py-4 px-6">
+                            {% if claim.status == 'approved' %}
+                                <span class="px-3 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">Approved</span>
+                            {% elif claim.status == 'flagged_investigation' %}
+                                <span class="px-3 py-1 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-600">Flagged</span>
+                            {% elif claim.status == 'review' %}
+                                <span class="px-3 py-1 rounded-full text-xs font-medium bg-accent/10 text-accent">In Review</span>
+                            {% elif claim.status == 'rejected' %}
+                                <span class="px-3 py-1 rounded-full text-xs font-medium bg-red-500/10 text-red-500">Rejected</span>
+                            {% elif claim.status == 'submitted' %}
+                                <span class="px-3 py-1 rounded-full text-xs font-medium bg-blue-500/10 text-blue-600">Submitted</span>
+                            {% else %}
+                                <span class="px-3 py-1 rounded-full text-xs font-medium bg-muted/10 text-muted">{{ claim.status|title }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="py-4 px-6 text-right">
+                            <a href="{{ url_for('claims.detail', claim_id=claim._id) }}" class="text-primary hover:underline font-medium">View Details</a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="py-8 text-center text-muted">No claims found.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Stagger table rows
+    gsap.from("tbody tr", {
+        y: 20,
+        opacity: 0,
+        duration: 0.5,
+        stagger: 0.1,
+        ease: "power2.out",
+        delay: 0.2
+    });
+</script>
+{% endblock %}

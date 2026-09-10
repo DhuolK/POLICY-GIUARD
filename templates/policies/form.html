@@ -1,0 +1,228 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="flex flex-col gap-6 max-w-3xl mx-auto">
+    <header class="mb-4">
+        {% if client_id %}
+            <a href="{{ url_for('clients.profile', client_id=client_id) }}" class="text-primary hover:underline text-sm font-medium flex items-center gap-1 mb-4">
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="19" y1="12" x2="5" y2="12"></line>
+                    <polyline points="12 19 5 12 12 5"></polyline>
+                </svg>
+                Back to Client Profile
+            </a>
+        {% else %}
+            <a href="{{ url_for('policies.list') }}" class="text-primary hover:underline text-sm font-medium flex items-center gap-1 mb-4">
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="19" y1="12" x2="5" y2="12"></line>
+                    <polyline points="12 19 5 12 12 5"></polyline>
+                </svg>
+                Back to Policies
+            </a>
+        {% endif %}
+        
+        <h1 class="text-3xl font-display font-bold text-ink">
+            {% if client %}
+                Add Issued Policy for {{ client.full_name }}
+            {% else %}
+                Add Issued Policy
+            {% endif %}
+        </h1>
+        <p class="text-muted mt-1">Record a new issued policy</p>
+    </header>
+
+    <div class="glass rounded-3xl p-8 relative overflow-hidden shadow-sm">
+        <div class="noise-overlay"></div>
+        
+        <form method="POST" action="" class="relative z-10 flex flex-col gap-6">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            {% if client_id %}
+            <input type="hidden" name="client_id" value="{{ client_id }}">
+            {% else %}
+            <div class="flex flex-col gap-1.5 mb-6">
+                <label for="client_select" class="text-sm font-medium text-ink">Select Client</label>
+                <select id="client_select" class="w-full bg-surface border border-divider rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all font-medium" onchange="if(this.value) window.location.href='?client_id=' + this.value">
+                    <option value="" disabled selected>Select a client to proceed...</option>
+                    {% for c in all_clients %}
+                        <option value="{{ c._id }}">{{ c.full_name }} ({{ c.phone }})</option>
+                    {% endfor %}
+                </select>
+                <p class="text-xs text-muted mt-1">You must select a client first to populate their vehicles.</p>
+            </div>
+            {% endif %}
+            
+            {% if vehicles %}
+            <div class="flex flex-col gap-1.5 mb-6">
+                <label for="vehicle_select" class="text-sm font-medium text-ink">Select Registered Vehicle</label>
+                <select id="vehicle_select" class="w-full bg-surface border border-divider rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all font-medium">
+                    <option value="" disabled selected>— Select an existing vehicle —</option>
+                    {% for v in vehicles %}
+                        <option value="{{ v.registration_number }}" data-make="{{ v.make }}" data-model="{{ v.model }}" data-year="{{ v.year }}">
+                            {{ v.registration_number }} - {{ v.make }} {{ v.model }} ({{ v.year }})
+                        </option>
+                    {% endfor %}
+                    <option value="new">— Register a New Vehicle —</option>
+                </select>
+                <p class="text-xs text-muted mt-1">Choosing an existing vehicle will auto-populate the details below.</p>
+            </div>
+            {% endif %}
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6" id="vehicle_details_grid">
+                <!-- Vehicle details -->
+                <div class="flex flex-col gap-1.5">
+                    <label for="make" class="text-sm font-medium text-ink">Vehicle Make</label>
+                    <input type="text" id="make" name="make" required value="{{ make or '' }}"
+                           class="w-full bg-surface border border-divider rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                           placeholder="e.g. Toyota">
+                </div>
+                
+                <div class="flex flex-col gap-1.5">
+                    <label for="model" class="text-sm font-medium text-ink">Vehicle Model</label>
+                    <input type="text" id="model" name="model" required value="{{ model or '' }}"
+                           class="w-full bg-surface border border-divider rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                           placeholder="e.g. Corolla">
+                </div>
+                
+                <div class="flex flex-col gap-1.5">
+                    <label for="year" class="text-sm font-medium text-ink">Year</label>
+                    <input type="number" id="year" name="year" required min="1990" max="2027" value="{{ year or '' }}"
+                           class="w-full bg-surface border border-divider rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                           placeholder="2023">
+                </div>
+                
+                <div class="flex flex-col gap-1.5">
+                    <label for="reg_number" class="text-sm font-medium text-ink">Registration Number</label>
+                    <input type="text" id="reg_number" name="reg_number" required value="{{ reg_number or '' }}"
+                           class="w-full bg-surface border border-divider rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all font-mono uppercase"
+                           placeholder="e.g. KAA 123A">
+                </div>
+            </div>
+            
+            <hr class="border-divider/50 my-2">
+            
+            <!-- Policy details -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="flex flex-col gap-1.5">
+                    <label for="policy_number" class="text-sm font-medium text-ink">Policy Number</label>
+                    <input type="hidden" name="suggested_policy_number" value="{{ default_policy_number }}">
+                    <input type="text" id="policy_number" name="policy_number" required value="{{ default_policy_number }}"
+                           class="w-full bg-surface border border-divider rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all font-mono uppercase"
+                           placeholder="e.g. PG-2026-00001">
+                </div>
+
+                <div class="flex flex-col gap-1.5">
+                    <label for="policy_type" class="text-sm font-medium text-ink">Policy Type</label>
+                    <select id="policy_type" name="policy_type" required onchange="updatePremium(this)"
+                            class="w-full bg-surface border border-divider rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all">
+                        <option value="" disabled selected>Select coverage type...</option>
+                        {% for type in policy_types %}
+                            <option value="{{ type.name }}" data-premium="{{ type.default_premium }}">{{ type.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="flex flex-col gap-1.5">
+                    <label for="effective_date" class="text-sm font-medium text-ink">Effective (Start) Date</label>
+                    <input type="date" id="effective_date" name="effective_date" required value="{{ default_effective_date }}"
+                           class="w-full bg-surface border border-divider rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all">
+                </div>
+
+                <div class="flex flex-col gap-1.5">
+                    <label for="expiry_date" class="text-sm font-medium text-ink">Expiry (End) Date</label>
+                    <input type="date" id="expiry_date" name="expiry_date" required value="{{ default_expiry_date }}"
+                           class="w-full bg-surface border border-divider rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all">
+                </div>
+            </div>
+            
+            <div class="flex flex-col gap-1.5">
+                <label for="premium" class="text-sm font-medium text-ink">Premium Amount (KES)</label>
+                <div class="relative">
+                    <span class="absolute left-4 top-1/2 -translate-y-1/2 text-muted font-medium">KES</span>
+                    <input type="number" id="premium" name="premium" required step="0.01"
+                           class="w-full bg-surface border border-divider rounded-xl pl-14 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                           placeholder="0.00">
+                </div>
+            </div>
+            
+            <div class="flex justify-end gap-4 mt-4">
+                {% if client_id %}
+                    <a href="{{ url_for('clients.profile', client_id=client_id) }}" class="px-6 py-3 rounded-xl font-medium text-muted hover:text-ink transition-colors">
+                        Cancel
+                    </a>
+                {% else %}
+                    <a href="{{ url_for('policies.list') }}" class="px-6 py-3 rounded-xl font-medium text-muted hover:text-ink transition-colors">
+                        Cancel
+                    </a>
+                {% endif %}
+                <button type="submit" class="magnetic-btn bg-primary text-surface font-semibold px-8 py-3 rounded-xl shadow-sm">
+                    Add Issued Policy
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function updatePremium(select) {
+        var premiumInput = document.getElementById('premium');
+        var selectedOption = select.options[select.selectedIndex];
+        var defaultPremium = selectedOption.getAttribute('data-premium');
+        if (defaultPremium && premiumInput.value === '') {
+            premiumInput.value = parseFloat(defaultPremium).toFixed(2);
+        }
+    }
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const vehicleSelect = document.getElementById('vehicle_select');
+    if (vehicleSelect) {
+        const makeInput = document.getElementById('make');
+        const modelInput = document.getElementById('model');
+        const yearInput = document.getElementById('year');
+        const regNumberInput = document.getElementById('reg_number');
+        const vehicleGrid = document.getElementById('vehicle_details_grid');
+
+        vehicleSelect.addEventListener('change', function() {
+            if (this.value === 'new') {
+                // Clear inputs for new vehicle
+                makeInput.value = '';
+                modelInput.value = '';
+                yearInput.value = '';
+                regNumberInput.value = '';
+                
+                // Make them editable
+                makeInput.readOnly = false;
+                modelInput.readOnly = false;
+                yearInput.readOnly = false;
+                regNumberInput.readOnly = false;
+                
+                // Ensure grid is visible
+                vehicleGrid.style.display = 'grid';
+            } else if (this.value !== '') {
+                // Populate from selected option
+                const selectedOption = this.options[this.selectedIndex];
+                makeInput.value = selectedOption.getAttribute('data-make') || '';
+                modelInput.value = selectedOption.getAttribute('data-model') || '';
+                yearInput.value = selectedOption.getAttribute('data-year') || '';
+                regNumberInput.value = this.value;
+                
+                // Make them readonly to prevent editing existing vehicle data accidentally
+                makeInput.readOnly = true;
+                modelInput.readOnly = true;
+                yearInput.readOnly = true;
+                regNumberInput.readOnly = true;
+                
+                // Ensure grid is visible
+                vehicleGrid.style.display = 'grid';
+            }
+        });
+        
+        // Trigger change on load if a value is selected (e.g. from server-side pre-population or back navigation)
+        if (vehicleSelect.value) {
+            vehicleSelect.dispatchEvent(new Event('change'));
+        }
+    }
+});
+</script>
+{% endblock %}

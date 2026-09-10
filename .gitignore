@@ -1,0 +1,29 @@
+# Local secrets
+.env
+.env.*
+!.env.example
+
+# Python caches and environments
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+
+# Local agent and tool metadata
+.agent/
+.agents/
+.claude/
+.opencode/
+.freebuff/
+_bmad/
+_bmad-output/
+
+# Generated design bundles and archives
+build-premium-website/
+frontend-design/
+*.zip
+
+# Local database backups
+scripts/backups/

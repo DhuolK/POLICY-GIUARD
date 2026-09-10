@@ -1,0 +1,110 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="flex flex-col gap-6 max-w-6xl mx-auto">
+    <header class="mb-2">
+        <h1 class="text-4xl font-display font-bold text-ink">System Audit Logs</h1>
+        <p class="text-muted mt-1">Full immutable history of status transitions, role changes, and secure transactions</p>
+    </header>
+
+    <!-- Filters Bar -->
+    <div class="glass p-6 rounded-3xl border border-divider/40 flex flex-col md:flex-row gap-4 items-end">
+        <form method="GET" action="{{ url_for('admin.audit_logs') }}" class="w-full grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="flex flex-col gap-1.5">
+                <label for="entity_type" class="text-xs font-semibold text-ink uppercase tracking-wider">Entity Type</label>
+                <select id="entity_type" name="entity_type" class="bg-surface border border-divider rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary">
+                    <option value="">-- All Entities --</option>
+                    <option value="policy" {% if entity_type == 'policy' %}selected{% endif %}>Policy</option>
+                    <option value="claim" {% if entity_type == 'claim' %}selected{% endif %}>Claim</option>
+                    <option value="user" {% if entity_type == 'user' %}selected{% endif %}>User Management</option>
+                    <option value="payment" {% if entity_type == 'payment' %}selected{% endif %}>Payment</option>
+                </select>
+            </div>
+
+            <div class="flex flex-col gap-1.5">
+                <label for="entity_id" class="text-xs font-semibold text-ink uppercase tracking-wider">Entity ID (Hex ID)</label>
+                <input type="text" id="entity_id" name="entity_id" value="{{ entity_id or '' }}" placeholder="e.g. 64b3ef..." class="bg-surface border border-divider rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary">
+            </div>
+
+            <div class="flex items-end gap-2">
+                <button type="submit" class="magnetic-btn flex-1 bg-primary text-surface font-semibold py-2.5 rounded-xl text-sm shadow-sm hover:shadow-md transition-shadow">
+                    Filter Logs
+                </button>
+                <a href="{{ url_for('admin.audit_logs') }}" class="magnetic-btn border border-divider text-ink px-4 py-2.5 rounded-xl text-sm hover:bg-surface transition-all">
+                    Reset
+                </a>
+            </div>
+        </form>
+    </div>
+
+    <!-- Logs Table -->
+    <div class="glass rounded-3xl p-1 overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="border-b border-divider/50 bg-surface/30">
+                        <th class="py-4 px-6 font-medium text-sm text-muted">Timestamp</th>
+                        <th class="py-4 px-6 font-medium text-sm text-muted">Performer</th>
+                        <th class="py-4 px-6 font-medium text-sm text-muted">Action</th>
+                        <th class="py-4 px-6 font-medium text-sm text-muted">Entity</th>
+                        <th class="py-4 px-6 font-medium text-sm text-muted">Details</th>
+                    </tr>
+                </thead>
+                <tbody class="text-xs font-medium">
+                    {% for log in logs %}
+                    <tr class="border-b border-divider/30 hover:bg-surface/50 transition-colors">
+                        <td class="py-4 px-6 text-muted font-mono whitespace-nowrap">{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S UTC') if log.timestamp else 'N/A' }}</td>
+                        <td class="py-4 px-6">
+                            <span class="text-ink font-bold">{{ log.performer_name or 'System' }}</span>
+                            {% if log.performed_by %}
+                                <span class="block text-[10px] font-mono text-muted">{{ log.performed_by }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="py-4 px-6">
+                            <span class="px-2 py-0.5 rounded-md font-mono text-[10px] uppercase font-bold bg-surface border border-divider/60 text-ink">
+                                {{ log.action }}
+                            </span>
+                        </td>
+                        <td class="py-4 px-6">
+                            <span class="capitalize font-semibold text-ink">{{ log.entity_type }}</span>
+                            {% if log.entity_id %}
+                                <span class="block text-[10px] font-mono text-muted">{{ log.entity_id }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="py-4 px-6 font-mono text-muted max-w-xs truncate" title="{{ log.details }}">
+                            {% if log.details %}
+                                <div class="flex flex-col gap-0.5">
+                                    {% for k, v in log.details.items() %}
+                                        <span><strong class="text-ink">{{ k }}:</strong> {{ v }}</span>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="py-8 text-center text-muted text-sm">No audit logs found.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Stagger table rows on load
+    gsap.from("tbody tr", {
+        y: 10,
+        opacity: 0,
+        duration: 0.35,
+        stagger: 0.05,
+        ease: "power2.out",
+        delay: 0.1
+    });
+</script>
+{% endblock %}

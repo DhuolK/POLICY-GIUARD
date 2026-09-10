@@ -1,0 +1,480 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="flex flex-col gap-6 max-w-4xl mx-auto">
+    <header class="mb-2">
+        <a href="{{ url_for('claims.list') }}" class="text-accent hover:underline text-sm font-medium flex items-center gap-1 mb-4">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="19" y1="12" x2="5" y2="12"></line>
+                <polyline points="12 19 5 12 12 5"></polyline>
+            </svg>
+            Back to Claims
+        </a>
+        <h1 class="text-3xl font-display font-bold text-ink">Motor Vehicle Accident Claim Form</h1>
+        <p class="text-muted mt-1">Please fill in all applicable sections accurately.</p>
+    </header>
+
+    <form method="POST" action="{{ url_for('claims.new') }}" enctype="multipart/form-data" id="claimForm" class="flex flex-col gap-6">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        
+        <!-- Section A.1: The Insured & Policy Link -->
+        <div class="glass rounded-3xl p-8 shadow-sm">
+            <h2 class="text-lg font-display font-bold text-ink mb-1">Section A.1 — Policy & Insured Details</h2>
+            <p class="text-muted text-xs mb-6">Select policy and enter policyholder details</p>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                <div class="flex flex-col gap-1.5 md:col-span-3">
+                    <label for="policy_id" class="text-sm font-medium text-ink">Associated Policy <span class="text-rose-500">*</span></label>
+                    <select id="policy_id" name="policy_id" required class="bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all">
+                        <option value="" disabled selected>Select a Policy</option>
+                        {% if policies %}
+                            {% for policy in policies %}
+                                <option value="{{ policy._id }}">Policy #{{ policy.policy_number }} ({{ policy.client_name }} — {{ policy.reg_number or 'Vehicle' }})</option>
+                            {% endfor %}
+                        {% endif %}
+                    </select>
+                </div>
+                <div class="flex flex-col gap-1.5">
+                    <label for="insured_title" class="text-sm font-medium text-ink">Title</label>
+                    <select id="insured_title" name="insured_title" class="bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all">
+                        <option value="" disabled selected>Select</option>
+                        <option value="Mr">Mr</option>
+                        <option value="Mrs">Mrs</option>
+                        <option value="Ms">Ms</option>
+                        <option value="Dr">Dr</option>
+                    </select>
+                </div>
+                <div class="flex flex-col gap-1.5">
+                    <label for="insured_first_name" class="text-sm font-medium text-ink">First Name</label>
+                    <input type="text" id="insured_first_name" name="insured_first_name" required class="bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all">
+                </div>
+                <div class="flex flex-col gap-1.5">
+                    <label for="insured_last_name" class="text-sm font-medium text-ink">Last Name</label>
+                    <input type="text" id="insured_last_name" name="insured_last_name" required class="bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all">
+                </div>
+                <div class="flex flex-col gap-1.5 md:col-span-2">
+                    <label for="insured_postal_address" class="text-sm font-medium text-ink">Postal Address</label>
+                    <input type="text" id="insured_postal_address" name="insured_postal_address" class="bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all" placeholder="P.O. Box / Street Address">
+                </div>
+                <div class="flex flex-col gap-1.5">
+                    <label for="insured_phone" class="text-sm font-medium text-ink">Phone Number</label>
+                    <input type="tel" id="insured_phone" name="insured_phone" class="bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all" placeholder="+254...">
+                </div>
+            </div>
+        </div>
+        
+        <!-- Section A.2: Details of the Accident Vehicle -->
+        <div class="glass rounded-3xl p-8 shadow-sm">
+            <h2 class="text-lg font-display font-bold text-ink mb-1">Section A.2 — Accident Vehicle Details</h2>
+            <p class="text-muted text-xs mb-6">Details of the vehicle involved in the accident</p>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div class="flex flex-col gap-1.5">
+                    <label for="accident_vehicle_reg" class="text-sm font-medium text-ink">Registration Number</label>
+                    <input type="text" id="accident_vehicle_reg" name="accident_vehicle_reg" required class="bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all" placeholder="e.g. KAA 123A">
+                </div>
+                <div class="flex flex-col gap-1.5">
+                    <label for="accident_vehicle_make_model" class="text-sm font-medium text-ink">Make & Model</label>
+                    <input type="text" id="accident_vehicle_make_model" name="accident_vehicle_make_model" class="bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all" placeholder="e.g. Toyota Corolla">
+                </div>
+                <div class="flex flex-col gap-1.5">
+                    <label for="accident_vehicle_year" class="text-sm font-medium text-ink">Year of Manufacture</label>
+                    <input type="number" id="accident_vehicle_year" name="accident_vehicle_year" class="bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all" placeholder="e.g. 2022">
+                </div>
+                <div class="flex flex-col gap-1.5">
+                    <label for="accident_vehicle_seating_capacity" class="text-sm font-medium text-ink">Seating Capacity</label>
+                    <input type="number" id="accident_vehicle_seating_capacity" name="accident_vehicle_seating_capacity" class="bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all">
+                </div>
+            </div>
+        </div>
+        
+        <!-- Section A.3: Particulars of the Driver -->
+        <div class="glass rounded-3xl p-8 shadow-sm">
+            <h2 class="text-lg font-display font-bold text-ink mb-1">Section A.3 — Particulars of the Driver</h2>
+            <p class="text-muted text-xs mb-6">Details about the driver at the time of the accident</p>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div class="flex flex-col gap-1.5">
+                    <label for="driver_name" class="text-sm font-medium text-ink">Driver Full Name</label>
+                    <input type="text" id="driver_name" name="driver_name" required class="bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all">
+                </div>
+                <div class="flex flex-col gap-1.5">
+                    <label for="driver_phone" class="text-sm font-medium text-ink">Driver Phone</label>
+                    <input type="tel" id="driver_phone" name="driver_phone" class="bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all">
+                </div>
+                <div class="flex flex-col gap-1.5">
+                    <label for="driver_license_number" class="text-sm font-medium text-ink">Driving License Number</label>
+                    <input type="text" id="driver_license_number" name="driver_license_number" class="bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all">
+                </div>
+                <div class="flex flex-col gap-1.5">
+                    <label for="driver_dob" class="text-sm font-medium text-ink">Date of Birth</label>
+                    <input type="date" id="driver_dob" name="driver_dob" class="bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all">
+                </div>
+                <div class="flex flex-col gap-1.5">
+                    <label for="driver_experience_years" class="text-sm font-medium text-ink">Years of Driving Experience</label>
+                    <input type="number" id="driver_experience_years" name="driver_experience_years" class="bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all">
+                </div>
+                <div class="flex flex-col gap-1.5">
+                    <label for="driver_purpose" class="text-sm font-medium text-ink">Purpose of Use at Time of Accident</label>
+                    <select id="driver_purpose" name="driver_purpose" class="bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all">
+                        <option value="" disabled selected>Select</option>
+                        <option value="personal">Personal / Private</option>
+                        <option value="business">Business / Commercial</option>
+                        <option value="commute">Commuting</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 mt-5 pt-5 border-t border-divider/30">
+                <div class="flex items-center gap-3">
+                    <input type="checkbox" id="driver_is_employee" name="driver_is_employee" value="yes" class="w-4 h-4 rounded border-divider text-accent focus:ring-accent">
+                    <label for="driver_is_employee" class="text-sm text-ink">Driver is an employee of the insured?</label>
+                </div>
+                <div class="flex items-center gap-3">
+                    <input type="checkbox" id="driver_has_authority" name="driver_has_authority" value="yes" class="w-4 h-4 rounded border-divider text-accent focus:ring-accent">
+                    <label for="driver_has_authority" class="text-sm text-ink">Driver had authority to drive?</label>
+                </div>
+                <div class="flex items-center gap-3">
+                    <input type="checkbox" id="driver_under_influence" name="driver_under_influence" value="yes" class="w-4 h-4 rounded border-divider text-accent focus:ring-accent">
+                    <label for="driver_under_influence" class="text-sm text-ink">Driver under influence of alcohol/drugs?</label>
+                </div>
+                <div class="flex items-center gap-3">
+                    <input type="checkbox" id="driver_to_blame" name="driver_to_blame" value="yes" class="w-4 h-4 rounded border-divider text-accent focus:ring-accent">
+                    <label for="driver_to_blame" class="text-sm text-ink">Is driver to blame?</label>
+                </div>
+                <div class="flex items-center gap-3">
+                    <input type="checkbox" id="driver_admit_liability" name="driver_admit_liability" value="yes" class="w-4 h-4 rounded border-divider text-accent focus:ring-accent">
+                    <label for="driver_admit_liability" class="text-sm text-ink">Did driver admit liability?</label>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Section A.12: Particulars of the Accident -->
+        <div class="glass rounded-3xl p-8 shadow-sm">
+            <h2 class="text-lg font-display font-bold text-ink mb-1">Section A.12 — Particulars of the Accident</h2>
+            <p class="text-muted text-xs mb-6">Describe where, when, and how the accident occurred</p>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                <div class="flex flex-col gap-1.5">
+                    <label for="incident_date" class="text-sm font-medium text-ink">Date of Accident</label>
+                    <input type="date" id="incident_date" name="incident_date" required class="bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all">
+                </div>
+                <div class="flex flex-col gap-1.5">
+                    <label for="incident_time" class="text-sm font-medium text-ink">Time of Accident</label>
+                    <input type="time" id="incident_time" name="incident_time" class="bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all">
+                </div>
+                <div class="flex flex-col gap-1.5">
+                    <label for="incident_speed" class="text-sm font-medium text-ink">Estimated Speed (km/h)</label>
+                    <input type="number" id="incident_speed" name="incident_speed" class="bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all">
+                </div>
+                <div class="flex flex-col gap-1.5 md:col-span-3">
+                    <label for="incident_place" class="text-sm font-medium text-ink">Place of Accident</label>
+                    <input type="text" id="incident_place" name="incident_place" required class="bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all" placeholder="Road name, intersection, town">
+                </div>
+                <div class="flex flex-col gap-1.5">
+                    <label for="incident_occupants_count" class="text-sm font-medium text-ink">Number of Occupants</label>
+                    <input type="number" id="incident_occupants_count" name="incident_occupants_count" class="bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all">
+                </div>
+                <div class="flex flex-col gap-1.5">
+                    <label for="incident_visibility" class="text-sm font-medium text-ink">Visibility</label>
+                    <select id="incident_visibility" name="incident_visibility" class="bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all">
+                        <option value="" disabled selected>Select</option>
+                        <option value="good">Good</option>
+                        <option value="fair">Fair</option>
+                        <option value="poor">Poor</option>
+                        <option value="dark">Dark</option>
+                    </select>
+                </div>
+                <div class="flex flex-col gap-1.5">
+                    <label for="incident_weather" class="text-sm font-medium text-ink">Weather Conditions</label>
+                    <select id="incident_weather" name="incident_weather" class="bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all">
+                        <option value="" disabled selected>Select</option>
+                        <option value="clear">Clear / Sunny</option>
+                        <option value="rain">Rain</option>
+                        <option value="fog">Fog / Mist</option>
+                        <option value="overcast">Overcast</option>
+                    </select>
+                </div>
+                <div class="flex flex-col gap-1.5">
+                    <label for="incident_road_surface" class="text-sm font-medium text-ink">Road Surface</label>
+                    <select id="incident_road_surface" name="incident_road_surface" class="bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all">
+                        <option value="" disabled selected>Select</option>
+                        <option value="tarmac_dry">Tarmac – Dry</option>
+                        <option value="tarmac_wet">Tarmac – Wet</option>
+                        <option value="murram">Murram</option>
+                        <option value="gravel">Gravel</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Section A.13: Police Report -->
+        <div class="glass rounded-3xl p-8 shadow-sm">
+            <h2 class="text-lg font-display font-bold text-ink mb-1">Section A.13 — Police Report</h2>
+            <p class="text-muted text-xs mb-6">Details of the police report (if applicable)</p>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                <div class="flex flex-col gap-1.5">
+                    <label for="police_station_reported" class="text-sm font-medium text-ink">Police Station</label>
+                    <input type="text" id="police_station_reported" name="police_station_reported" class="bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all" placeholder="Station name">
+                </div>
+                <div class="flex flex-col gap-1.5">
+                    <label for="police_report_date" class="text-sm font-medium text-ink">Date Reported</label>
+                    <input type="date" id="police_report_date" name="police_report_date" class="bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all">
+                </div>
+                <div class="flex flex-col gap-1.5">
+                    <label for="police_officer_name" class="text-sm font-medium text-ink">Officer Name</label>
+                    <input type="text" id="police_officer_name" name="police_officer_name" class="bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all">
+                </div>
+            </div>
+        </div>
+        
+        <!-- Section B.15: Garage Details -->
+        <div class="glass rounded-3xl p-8 shadow-sm">
+            <h2 class="text-lg font-display font-bold text-ink mb-1">Section B.15 — Garage / Repair Details</h2>
+            <p class="text-muted text-xs mb-6">Where the vehicle was taken for assessment</p>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                <div class="flex flex-col gap-1.5">
+                    <label for="garage_name" class="text-sm font-medium text-ink">Garage Name</label>
+                    <input type="text" id="garage_name" name="garage_name" class="bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all">
+                </div>
+                <div class="flex flex-col gap-1.5">
+                    <label for="garage_contact_person" class="text-sm font-medium text-ink">Contact Person</label>
+                    <input type="text" id="garage_contact_person" name="garage_contact_person" class="bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all">
+                </div>
+                <div class="flex flex-col gap-1.5">
+                    <label for="garage_phone" class="text-sm font-medium text-ink">Garage Phone</label>
+                    <input type="tel" id="garage_phone" name="garage_phone" class="bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all">
+                </div>
+                <div class="flex flex-col gap-1.5 md:col-span-3">
+                    <label for="estimated_repair_cost" class="text-sm font-medium text-ink">Estimated Repair Cost (KSh) <span class="text-rose-500">*</span></label>
+                    <div class="relative">
+                        <span class="absolute left-4 top-1/2 -translate-y-1/2 text-muted font-semibold text-sm">KSh</span>
+                        <input type="number" id="estimated_repair_cost" name="estimated_repair_cost" required step="100" min="0" placeholder="e.g. 250000" class="w-full bg-surface border border-divider rounded-xl pl-16 pr-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Live Payout Estimator Box -->
+            <div class="mt-6 p-5 rounded-2xl bg-surface border border-accent/30 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <h3 class="text-xs font-bold text-accent uppercase tracking-wider mb-1">Automated Claim Payout Estimate</h3>
+                    <p class="text-xs text-muted">Calculated based on policy coverage type and standard 5% excess (minimum KSh 10,000).</p>
+                </div>
+                <div class="flex items-center gap-6">
+                    <div class="text-right">
+                        <p class="text-[11px] text-muted">Estimated Deductible (Excess)</p>
+                        <p id="dispDeductible" class="text-sm font-bold text-rose-600">KSh 0.00</p>
+                    </div>
+                    <div class="text-right pl-6 border-l border-divider">
+                        <p class="text-[11px] text-muted">Estimated Net Payout</p>
+                        <p id="dispPayout" class="text-xl font-display font-bold text-primary">KSh 0.00</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Section D: Injuries / Death -->
+        <div class="glass rounded-3xl p-8 shadow-sm">
+            <h2 class="text-lg font-display font-bold text-ink mb-1">Section D — Injuries or Death</h2>
+            <p class="text-muted text-xs mb-6">Record any injuries or fatalities</p>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div class="flex flex-col gap-1.5">
+                    <label for="injuries_count" class="text-sm font-medium text-ink">Number of Persons Injured</label>
+                    <input type="number" id="injuries_count" name="injuries_count" value="0" class="bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all">
+                </div>
+                <div class="flex flex-col gap-1.5">
+                    <label for="deaths_count" class="text-sm font-medium text-ink">Number of Deaths</label>
+                    <input type="number" id="deaths_count" name="deaths_count" value="0" class="bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all">
+                </div>
+            </div>
+        </div>
+        
+        <!-- Section 21: Statements -->
+        <div class="glass rounded-3xl p-8 shadow-sm">
+            <h2 class="text-lg font-display font-bold text-ink mb-1">Section 21 — Statements</h2>
+            <p class="text-muted text-xs mb-6">Narrative description from the driver and/or insured</p>
+            
+            <div class="flex flex-col gap-5">
+                <div class="flex flex-col gap-1.5">
+                    <label for="driver_statement" class="text-sm font-medium text-ink">Driver's Statement</label>
+                    <textarea id="driver_statement" name="driver_statement" rows="4" class="bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all" placeholder="The driver's account of the accident..."></textarea>
+                </div>
+                <div class="flex flex-col gap-1.5">
+                    <label for="insured_statement" class="text-sm font-medium text-ink">Insured's Statement</label>
+                    <textarea id="insured_statement" name="insured_statement" rows="4" class="bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all" placeholder="The insured's account (if different from the driver)..."></textarea>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Section 22: Proof of Claim & Categorized Attachments -->
+        <div class="glass rounded-3xl p-8 shadow-sm">
+            <h2 class="text-lg font-display font-bold text-ink mb-1">Section 22 — Proof of Claim & Categorized Evidence</h2>
+            <p class="text-muted text-xs mb-6">Upload proof files under their respective categories below (Images & PDFs allowed, max 16MB per file).</p>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Subsection 1: Vehicle Damage Photos -->
+                <div class="border border-divider rounded-2xl p-5 bg-surface/40 hover:bg-surface transition-colors flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center gap-2 mb-2">
+                            <span class="p-2 rounded-xl bg-blue-500/10 text-blue-600 font-bold">📷</span>
+                            <div>
+                                <h3 class="text-sm font-bold text-ink">Vehicle Damage Photos</h3>
+                                <p class="text-[11px] text-muted">Photos showing impact points & damaged vehicle parts</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <label for="proof_damage_photos" class="cursor-pointer border border-dashed border-divider hover:border-accent bg-surface p-3 rounded-xl flex items-center justify-center gap-2 text-xs font-semibold text-accent transition-colors">
+                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                            Choose Photos
+                        </label>
+                        <input type="file" id="proof_damage_photos" name="proof_damage_photos" multiple accept="image/*" class="hidden file-category-input" data-container="preview_damage_photos">
+                        <div id="preview_damage_photos" class="mt-2 flex flex-col gap-1 text-[11px] text-muted"></div>
+                    </div>
+                </div>
+
+                <!-- Subsection 2: Police Abstract / Report -->
+                <div class="border border-divider rounded-2xl p-5 bg-surface/40 hover:bg-surface transition-colors flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center gap-2 mb-2">
+                            <span class="p-2 rounded-xl bg-rose-500/10 text-rose-600 font-bold">📄</span>
+                            <div>
+                                <h3 class="text-sm font-bold text-ink">Police Abstract / Report</h3>
+                                <p class="text-[11px] text-muted">Official police abstract document or OB extract</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <label for="proof_police_report" class="cursor-pointer border border-dashed border-divider hover:border-accent bg-surface p-3 rounded-xl flex items-center justify-center gap-2 text-xs font-semibold text-accent transition-colors">
+                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                            Upload Police Report (PDF/Image)
+                        </label>
+                        <input type="file" id="proof_police_report" name="proof_police_report" multiple accept="image/*,.pdf" class="hidden file-category-input" data-container="preview_police_report">
+                        <div id="preview_police_report" class="mt-2 flex flex-col gap-1 text-[11px] text-muted"></div>
+                    </div>
+                </div>
+
+                <!-- Subsection 3: Garage Repair Estimate -->
+                <div class="border border-divider rounded-2xl p-5 bg-surface/40 hover:bg-surface transition-colors flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center gap-2 mb-2">
+                            <span class="p-2 rounded-xl bg-amber-500/10 text-amber-600 font-bold">🛠️</span>
+                            <div>
+                                <h3 class="text-sm font-bold text-ink">Garage Repair Estimate</h3>
+                                <p class="text-[11px] text-muted">Official repair quotation or pro-forma invoice</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <label for="proof_repair_estimate" class="cursor-pointer border border-dashed border-divider hover:border-accent bg-surface p-3 rounded-xl flex items-center justify-center gap-2 text-xs font-semibold text-accent transition-colors">
+                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                            Upload Repair Estimate (PDF/Image)
+                        </label>
+                        <input type="file" id="proof_repair_estimate" name="proof_repair_estimate" multiple accept="image/*,.pdf" class="hidden file-category-input" data-container="preview_repair_estimate">
+                        <div id="preview_repair_estimate" class="mt-2 flex flex-col gap-1 text-[11px] text-muted"></div>
+                    </div>
+                </div>
+
+                <!-- Subsection 4: Driver's License & ID Scan -->
+                <div class="border border-divider rounded-2xl p-5 bg-surface/40 hover:bg-surface transition-colors flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center gap-2 mb-2">
+                            <span class="p-2 rounded-xl bg-emerald-500/10 text-emerald-600 font-bold">🪪</span>
+                            <div>
+                                <h3 class="text-sm font-bold text-ink">Driver's License & ID Scan</h3>
+                                <p class="text-[11px] text-muted">Scan/photo of driver's license & national ID</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <label for="proof_driver_id" class="cursor-pointer border border-dashed border-divider hover:border-accent bg-surface p-3 rounded-xl flex items-center justify-center gap-2 text-xs font-semibold text-accent transition-colors">
+                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                            Upload License/ID (PDF/Image)
+                        </label>
+                        <input type="file" id="proof_driver_id" name="proof_driver_id" multiple accept="image/*,.pdf" class="hidden file-category-input" data-container="preview_driver_id">
+                        <div id="preview_driver_id" class="mt-2 flex flex-col gap-1 text-[11px] text-muted"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Submit -->
+        <div class="flex justify-end gap-4 mt-2 mb-8">
+            <a href="{{ url_for('claims.list') }}" class="px-8 py-3 rounded-full font-medium text-muted hover:text-ink transition-colors border border-divider">
+                Cancel
+            </a>
+            <button type="submit" class="magnetic-btn bg-accent text-surface font-semibold px-10 py-3 rounded-full shadow-md hover:bg-accent-dark transition-colors">
+                Submit Claim
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Animate form sections on scroll
+    gsap.from(".glass", {
+        y: 30,
+        opacity: 0,
+        duration: 0.6,
+        stagger: 0.1,
+        ease: "power3.out",
+        scrollTrigger: {
+            trigger: "#claimForm",
+            start: "top 80%"
+        }
+    });
+
+    // Real-time Claim Payout Estimator
+    const estInput = document.getElementById('estimated_repair_cost');
+    const dispDeductible = document.getElementById('dispDeductible');
+    const dispPayout = document.getElementById('dispPayout');
+
+    function updatePayoutEstimate() {
+        const cost = parseFloat(estInput.value) || 0;
+        if (cost <= 0) {
+            dispDeductible.innerText = 'KSh 0.00';
+            dispPayout.innerText = 'KSh 0.00';
+            return;
+        }
+
+        const deductible = Math.max(cost * 0.05, 10000);
+        const payout = Math.max(0, cost - deductible);
+
+        dispDeductible.innerText = `KSh ${deductible.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        dispPayout.innerText = `KSh ${payout.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    }
+
+    if (estInput) {
+        estInput.addEventListener('input', updatePayoutEstimate);
+    }
+
+    // Dynamic file previews for category upload inputs
+    document.querySelectorAll('.file-category-input').forEach(input => {
+        input.addEventListener('change', (e) => {
+            const containerId = input.getAttribute('data-container');
+            const container = document.getElementById(containerId);
+            if (!container) return;
+
+            container.innerHTML = '';
+            const files = e.target.files;
+            if (!files || files.length === 0) return;
+
+            Array.from(files).forEach(f => {
+                const mb = (f.size / (1024 * 1024)).toFixed(2);
+                const item = document.createElement('div');
+                item.className = 'flex items-center justify-between p-2 bg-surface rounded-lg border border-divider text-[11px] font-medium text-ink';
+                item.innerHTML = `
+                    <span class="truncate max-w-[180px]">${f.name}</span>
+                    <span class="text-muted text-[10px]">${mb} MB</span>
+                `;
+                container.appendChild(item);
+            });
+        });
+    });
+</script>
+{% endblock %}
