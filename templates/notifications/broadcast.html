@@ -1,0 +1,145 @@
+{% extends 'base.html' %}
+
+{% block title %}Bulk SMS Broadcast — Policy Guard{% endblock %}
+
+{% block content %}
+<div class="flex flex-col gap-6 max-w-4xl mx-auto w-full">
+
+    <!-- Header -->
+    <header class="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 pb-2 border-b border-divider/60">
+        <div>
+            <div class="flex items-center gap-2 text-xs text-muted font-medium mb-1">
+                <a href="{{ url_for('notifications.index') }}" class="hover:text-primary transition-colors">Alerts</a>
+                <span>&rsaquo;</span>
+                <span class="text-ink font-semibold">Bulk SMS Broadcast</span>
+            </div>
+            <h1 class="text-3xl sm:text-4xl font-display font-bold text-ink tracking-tight">Customer SMS Broadcast</h1>
+            <p class="text-muted text-xs sm:text-sm mt-1">Dispatch regulatory notices, renewal advisories, or operational updates directly to customer phones via Africa's Talking</p>
+        </div>
+    </header>
+
+    <!-- Main Broadcast Card -->
+    <div class="glass-card rounded-3xl p-6 sm:p-8 shadow-glass border border-slate-200/80">
+        <form action="{{ url_for('notifications.broadcast') }}" method="POST" class="flex flex-col gap-6">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <!-- Audience Segment Selector -->
+            <div>
+                <label class="block text-xs font-semibold text-ink uppercase tracking-wider mb-2">Target Customer Audience *</label>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <label class="flex items-start gap-3 p-3.5 rounded-2xl border border-divider hover:border-primary/50 bg-surface cursor-pointer transition-all">
+                        <input type="radio" name="target_group" value="all" checked onchange="toggleUnderwriterPicker()" class="mt-0.5 text-primary focus:ring-primary">
+                        <div>
+                            <span class="text-xs font-bold text-ink block">All Registered Customers</span>
+                            <span class="text-[11px] text-muted">Broadcast to all client profiles in the database</span>
+                        </div>
+                    </label>
+
+                    <label class="flex items-start gap-3 p-3.5 rounded-2xl border border-divider hover:border-primary/50 bg-surface cursor-pointer transition-all">
+                        <input type="radio" name="target_group" value="active" onchange="toggleUnderwriterPicker()" class="mt-0.5 text-primary focus:ring-primary">
+                        <div>
+                            <span class="text-xs font-bold text-ink block">Active Policy Holders</span>
+                            <span class="text-[11px] text-muted">Clients with currently active/published policies</span>
+                        </div>
+                    </label>
+
+                    <label class="flex items-start gap-3 p-3.5 rounded-2xl border border-divider hover:border-primary/50 bg-surface cursor-pointer transition-all">
+                        <input type="radio" name="target_group" value="expiring" onchange="toggleUnderwriterPicker()" class="mt-0.5 text-primary focus:ring-primary">
+                        <div>
+                            <span class="text-xs font-bold text-ink block">Expiring Policies (≤ 30 Days)</span>
+                            <span class="text-[11px] text-muted">Clients whose coverage is due for renewal soon</span>
+                        </div>
+                    </label>
+
+                    <label class="flex items-start gap-3 p-3.5 rounded-2xl border border-divider hover:border-primary/50 bg-surface cursor-pointer transition-all">
+                        <input type="radio" name="target_group" value="underwriter" onchange="toggleUnderwriterPicker()" class="mt-0.5 text-primary focus:ring-primary">
+                        <div>
+                            <span class="text-xs font-bold text-ink block">Specific Underwriter Clients</span>
+                            <span class="text-[11px] text-muted">Filter by underwriting insurance company</span>
+                        </div>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Underwriter Dropdown (Conditional) -->
+            <div id="underwriterPicker" class="hidden flex-col gap-1.5 p-4 rounded-2xl bg-slate-50 border border-slate-200">
+                <label for="underwriter_name" class="text-xs font-semibold text-ink">Select Insurance Underwriter</label>
+                <select id="underwriter_name" name="underwriter_name" class="w-full bg-surface border border-divider rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+                    <option value="">-- Choose Underwriter --</option>
+                    {% for comp in insurance_companies %}
+                    <option value="{{ comp.name }}">{{ comp.name }} ({{ comp.short_name }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Preset Templates -->
+            <div>
+                <label class="block text-xs font-semibold text-ink uppercase tracking-wider mb-2">Quick Message Templates</label>
+                <div class="flex flex-wrap gap-2">
+                    <button type="button" onclick="setTemplate('Dear client, your vehicle insurance policy is due for renewal. Please contact Policy Guard on 0712345678 or pay via Lipa Na M-Pesa to maintain active coverage.')" class="px-3 py-1.5 rounded-full text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors">
+                        Renewal Reminder
+                    </button>
+                    <button type="button" onclick="setTemplate('Dear Valued Customer, please note our offices will remain accessible 24/7 for digital policy renewals and claims assistance via our portal.')" class="px-3 py-1.5 rounded-full text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors">
+                        Customer Advisory
+                    </button>
+                    <button type="button" onclick="setTemplate('Notice: In compliance with IRA regulations, digital insurance certificates are immediately verifiable upon instant premium payment settlement.')" class="px-3 py-1.5 rounded-full text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors">
+                        IRA Compliance Notice
+                    </button>
+                </div>
+            </div>
+
+            <!-- Message Textarea with Live Counter -->
+            <div class="flex flex-col gap-1.5">
+                <div class="flex justify-between items-center">
+                    <label for="messageText" class="text-xs font-semibold text-ink uppercase tracking-wider">SMS Message Content *</label>
+                    <div class="text-xs font-mono text-muted">
+                        <span id="charCount">0</span> characters &bull; <span id="segmentCount" class="font-bold text-primary">1</span> SMS segment(s)
+                    </div>
+                </div>
+                <textarea id="messageText" name="message" rows="5" required oninput="updateCounter()" placeholder="Type your SMS message here..." class="w-full bg-slate-50 border border-divider rounded-2xl p-4 text-xs sm:text-sm font-sans focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"></textarea>
+                <p class="text-[11px] text-muted">Standard SMS messages contain up to 160 characters per billing segment. Delivery runs in simulated mode unless production credentials are active.</p>
+            </div>
+
+            <!-- Submit Action -->
+            <div class="flex items-center justify-end gap-3 pt-4 border-t border-divider/60">
+                <a href="{{ url_for('notifications.index') }}" class="px-5 py-2.5 rounded-full text-xs font-semibold text-muted hover:text-ink hover:bg-slate-100 transition-all">
+                    Cancel
+                </a>
+                <button type="submit" onclick="return confirm('Are you sure you want to dispatch this SMS broadcast?');" class="apple-btn inline-flex items-center gap-2 px-6 py-2.5 rounded-full text-xs font-semibold text-surface bg-primary hover:bg-primary-dark shadow-sm transition-all">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+                    <span>Dispatch Broadcast</span>
+                </button>
+            </div>
+        </form>
+    </div>
+
+</div>
+
+<script>
+function toggleUnderwriterPicker() {
+    const selected = document.querySelector('input[name="target_group"]:checked').value;
+    const picker = document.getElementById('underwriterPicker');
+    if (selected === 'underwriter') {
+        picker.classList.remove('hidden');
+        picker.classList.add('flex');
+    } else {
+        picker.classList.remove('flex');
+        picker.classList.add('hidden');
+    }
+}
+
+function updateCounter() {
+    const textarea = document.getElementById('messageText');
+    const chars = textarea.value.length;
+    document.getElementById('charCount').textContent = chars;
+    const segments = Math.max(1, Math.ceil(chars / 160));
+    document.getElementById('segmentCount').textContent = segments;
+}
+
+function setTemplate(text) {
+    const textarea = document.getElementById('messageText');
+    textarea.value = text;
+    updateCounter();
+}
+</script>
+{% endblock %}

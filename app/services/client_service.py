@@ -136,3 +136,41 @@ class ClientService:
             session=session
         )
         return client, None
+
+    @staticmethod
+    def bulk_reassign_clients(source_worker_id, target_worker_id, session=None):
+        """Bulk reassign all clients from source worker to target worker.
+
+        Admin-only operation to reallocate books of business / portfolios.
+        """
+        db = get_db()
+        src_oid = to_object_id(source_worker_id)
+        dst_oid = to_object_id(target_worker_id)
+
+        if not src_oid or not dst_oid:
+            return 0, "Both source and target staff IDs are required."
+
+        if str(src_oid) == str(dst_oid):
+            return 0, "Source and target staff accounts cannot be identical."
+
+        target_user = db.users.find_one({"_id": dst_oid, "role": {"$in": ["admin", "worker"]}}, session=session)
+        if not target_user:
+            return 0, "Target staff member not found."
+
+        # Reassign clients where assigned_worker_id is src_oid OR created_by is src_oid and unassigned
+        query = {
+            "role": ROLE_CUSTOMER,
+            "$or": [
+                {"assigned_worker_id": src_oid},
+                {"assigned_worker_id": {"$in": [None, ""]}, "created_by": src_oid}
+            ]
+        }
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        result = db.users.update_many(
+            query,
+            {"$set": {"assigned_worker_id": dst_oid, "updated_at": now}},
+            session=session
+        )
+        return result.modified_count, None
+

@@ -3,236 +3,641 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}POLICY GUARD{% endblock %}</title>
+    <title>{% block title %}Policy Guard — Westlake Insurance Agency{% endblock %}</title>
 
-    <!-- Favicon / PWA icon — Westlake logo icon (compact brand identifier) -->
+    <!-- Favicon / PWA icon -->
     <link rel="icon" type="image/png" sizes="256x256" href="{{ url_for('static', filename='img/favicon-256.png') }}">
     <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/favicon-256.png') }}">
 
-    <!-- Google Fonts -->
+    <!-- Google Fonts: Plus Jakarta Sans, Inter, JetBrains Mono -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,400&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-    
-    <!-- GSAP -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- GSAP for smooth micro-interactions -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
 
-    <!-- Tailwind CSS (CDN for dev) -->
+    <!-- Tailwind CSS (Play CDN with clean console logging) -->
+    <script>
+        (function() {
+            const _warn = console.warn;
+            console.warn = function(...args) {
+                if (typeof args[0] === 'string' && args[0].includes('cdn.tailwindcss.com')) return;
+                _warn.apply(console, args);
+            };
+        })();
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
             theme: {
                 extend: {
                     colors: {
-                        primary: '#1E3A8A', /* Dark Blue for Insurance */
-                        'primary-dark': '#172554',
-                        'primary-light': '#3B82F6',
-                        accent: '#F59E0B', /* Amber */
-                        'accent-dark': '#D97706',
+                        primary: '#0F3A8A',
+                        'primary-dark': '#0B2559',
+                        'primary-light': '#2563EB',
+                        'primary-50': '#EFF6FF',
+                        accent: '#D97706',
+                        'accent-dark': '#B45309',
+                        'accent-light': '#FDE68A',
                         background: '#F8FAFC',
                         surface: '#FFFFFF',
+                        'surface-subtle': '#F1F5F9',
                         ink: '#0F172A',
+                        'ink-secondary': '#334155',
                         muted: '#64748B',
+                        'muted-light': '#94A3B8',
                         divider: '#E2E8F0',
-                        deep: '#020617',
+                        'divider-light': '#F1F5F9',
                     },
                     fontFamily: {
-                        display: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
-                        serif: ['"Cormorant Garamond"', 'serif'],
-                        body: ['"Inter"', 'system-ui', 'sans-serif'],
-                        mono: ['"JetBrains Mono"', 'monospace'],
+                        display: ['"Plus Jakarta Sans"', '-apple-system', 'BlinkMacSystemFont', '"SF Pro Display"', 'system-ui', 'sans-serif'],
+                        body: ['"Inter"', '-apple-system', 'BlinkMacSystemFont', '"SF Pro Text"', 'system-ui', 'sans-serif'],
+                        mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
+                    },
+                    boxShadow: {
+                        'glass': '0 8px 32px 0 rgba(15, 23, 42, 0.06), 0 1px 2px 0 rgba(15, 23, 42, 0.04)',
+                        'glass-lg': '0 20px 40px -15px rgba(15, 23, 42, 0.08), 0 1px 3px 0 rgba(15, 23, 42, 0.04)',
+                        'apple-card': '0 4px 20px -2px rgba(15, 23, 42, 0.05), 0 2px 6px -1px rgba(15, 23, 42, 0.03)',
+                        'apple-hover': '0 12px 28px -4px rgba(15, 23, 42, 0.10), 0 4px 12px -2px rgba(15, 23, 42, 0.05)',
+                        'subtle-inner': 'inset 0 1px 1px 0 rgba(255, 255, 255, 0.8)',
                     },
                     borderRadius: {
                         '2.5xl': '1.25rem',
+                        '3xl': '1.5rem',
                         '4xl': '2rem',
                     },
-                    animation: {
-                        'pulse-slow': 'pulse 3s ease-in-out infinite',
-                        'float': 'float 6s ease-in-out infinite',
-                    },
-                    keyframes: {
-                        float: {
-                            '0%, 100%': { transform: 'translateY(0)' },
-                            '50%': { transform: 'translateY(-8px)' },
-                        }
+                    transitionTimingFunction: {
+                        'apple-spring': 'cubic-bezier(0.16, 1, 0.3, 1)',
                     }
                 }
             }
         }
     </script>
-    
+
     <style type="text/tailwindcss">
         @layer base {
+            html {
+                font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+                -webkit-font-smoothing: antialiased;
+                -moz-osx-font-smoothing: grayscale;
+            }
             body {
-                @apply bg-background text-ink font-body;
+                @apply bg-background text-ink font-body selection:bg-primary selection:text-surface;
                 overflow-x: hidden;
             }
-            ::selection { background-color: #052965; color: #FFFFFF; }
-            ::-webkit-scrollbar { width: 10px; }
+            ::-webkit-scrollbar { width: 8px; height: 8px; }
             ::-webkit-scrollbar-track { background: #F8FAFC; }
-            ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 10px; }
+            ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 9999px; }
             ::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
         }
         @layer components {
-            .magnetic-btn {
-                position: relative;
-                overflow: hidden;
-                transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            .glass-nav {
+                background: rgba(255, 255, 255, 0.82);
+                backdrop-filter: blur(24px) saturate(190%);
+                -webkit-backdrop-filter: blur(24px) saturate(190%);
+                border: 1px solid rgba(255, 255, 255, 0.7);
+                box-shadow: 0 8px 32px 0 rgba(15, 23, 42, 0.05), 0 1px 1px 0 rgba(255, 255, 255, 0.8) inset;
             }
-            .magnetic-btn:hover { transform: scale(1.03) translateY(-1px); }
-            .magnetic-btn:active { transform: scale(0.98); }
-            .magnetic-btn::before {
-                content: '';
-                position: absolute;
-                inset: 0;
-                background: linear-gradient(135deg, rgba(255,255,255,0.15), rgba(255,255,255,0));
-                transform: translateY(100%);
-                transition: transform 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            .glass-panel {
+                background: rgba(255, 255, 255, 0.78);
+                backdrop-filter: blur(20px) saturate(180%);
+                -webkit-backdrop-filter: blur(20px) saturate(180%);
+                border: 1px solid rgba(226, 232, 240, 0.7);
+                box-shadow: 0 4px 24px -1px rgba(15, 23, 42, 0.04), 0 1px 1px 0 rgba(255, 255, 255, 0.9) inset;
             }
-            .magnetic-btn:hover::before { transform: translateY(0); }
-            .lift-on-hover { transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94); }
-            .lift-on-hover:hover { transform: translateY(-1px); }
-            .gradient-text {
-                background: linear-gradient(135deg, #052965 0%, #1586B0 100%);
-                -webkit-background-clip: text;
-                -webkit-text-fill-color: transparent;
-                background-clip: text;
+            .glass-card {
+                background: rgba(255, 255, 255, 0.88);
+                backdrop-filter: blur(16px);
+                -webkit-backdrop-filter: blur(16px);
+                border: 1px solid rgba(226, 232, 240, 0.7);
+                box-shadow: 0 2px 12px -1px rgba(15, 23, 42, 0.03);
             }
-            .glass {
-                background: rgba(248, 250, 252, 0.75);
-                backdrop-filter: blur(20px);
-                -webkit-backdrop-filter: blur(20px);
-                border: 1px solid rgba(226, 232, 240, 0.6);
+            .glass-dropdown {
+                background: rgba(255, 255, 255, 0.94);
+                backdrop-filter: blur(28px) saturate(200%);
+                -webkit-backdrop-filter: blur(28px) saturate(200%);
+                border: 1px solid rgba(226, 232, 240, 0.8);
+                box-shadow: 0 20px 40px -12px rgba(15, 23, 42, 0.12), 0 1px 2px 0 rgba(0, 0, 0, 0.04);
             }
             .glass-dark {
-                background: rgba(15, 23, 42, 0.75);
-                backdrop-filter: blur(20px);
-                -webkit-backdrop-filter: blur(20px);
+                background: rgba(15, 23, 42, 0.92);
+                backdrop-filter: blur(24px) saturate(190%);
+                -webkit-backdrop-filter: blur(24px) saturate(190%);
+                border-top: 1px solid rgba(255, 255, 255, 0.1);
             }
-            .grid-bg {
+            .apple-btn {
+                transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease, background-color 0.15s ease;
+            }
+            .apple-btn:active {
+                transform: scale(0.97);
+            }
+            .nav-link {
+                @apply text-ink-secondary hover:text-primary px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-150 inline-flex items-center gap-1 hover:bg-slate-100/70;
+            }
+            .nav-link.active {
+                @apply text-primary bg-primary-50 font-semibold;
+            }
+            .dropdown-item {
+                @apply flex items-center gap-2.5 px-3.5 py-2.5 text-xs font-medium text-ink-secondary hover:text-primary hover:bg-slate-100/80 rounded-xl transition-all;
+            }
+            .grid-subtle {
                 background-image:
-                  linear-gradient(rgba(5, 41, 101, 0.05) 1px, transparent 1px),
-                  linear-gradient(90deg, rgba(5, 41, 101, 0.05) 1px, transparent 1px);
-                background-size: 40px 40px;
+                  radial-gradient(rgba(15, 58, 138, 0.04) 1px, transparent 1px);
+                background-size: 24px 24px;
             }
         }
     </style>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
 </head>
-<body class="grid-bg min-h-screen flex flex-col">
+<body class="grid-subtle min-h-screen flex flex-col antialiased">
 
-    <!-- Navbar -->
-    <nav class="fixed top-4 left-4 right-4 z-50 glass rounded-full px-6 py-4 flex justify-between items-center max-w-7xl mx-auto shadow-sm">
-        <a href="{{ url_for('dashboard.index') }}" class="flex items-center" aria-label="Westlake Insurance Agency — Home">
-            <!-- Westlake full logo — desktop / tablet -->
-            <img src="{{ url_for('static', filename='img/westlake-logo.png') }}" alt="Westlake Insurance Agency" class="hidden sm:block h-10 w-auto">
-            <!-- Westlake icon — mobile (space-limited) -->
-            <img src="{{ url_for('static', filename='img/westlake-icon.png') }}" alt="" aria-hidden="true" class="sm:hidden h-8 w-auto">
-        </a>
-        <div class="hidden md:flex gap-8 items-center font-medium text-sm">
+    <!-- Primary Top Navigation Bar -->
+    <header class="fixed top-3 left-3 right-3 sm:top-4 sm:left-6 sm:right-6 z-50 max-w-7xl mx-auto pointer-events-none">
+        <nav class="glass-nav rounded-full px-4 sm:px-6 py-2.5 sm:py-3 flex justify-between items-center pointer-events-auto shadow-glass border border-slate-200/60 transition-all duration-200" aria-label="Main Navigation">
+
+            <!-- Left: Brand Logo & Title -->
+            <div class="flex items-center gap-3">
+                <a href="{{ url_for('dashboard.index') }}" class="flex items-center gap-2.5 group focus:outline-none" aria-label="Westlake Insurance Agency — Home">
+                    <img src="{{ url_for('static', filename='img/westlake-logo.png') }}" alt="Westlake Insurance Agency" class="hidden md:block h-8 w-auto transition-transform group-hover:scale-[1.02]">
+                    <img src="{{ url_for('static', filename='img/westlake-icon.png') }}" alt="Westlake Logo Icon" class="md:hidden h-7 w-auto">
+                    <span class="hidden sm:inline-block text-[11px] font-mono font-semibold tracking-wider text-muted px-2 py-0.5 rounded-full bg-slate-100/90 border border-slate-200/60">v2.4</span>
+                </a>
+            </div>
+
+            <!-- Center: Grouped Dropdowns Navigation (Desktop) -->
             {% if current_user.is_authenticated %}
-                <a href="{{ url_for('dashboard.index') }}" class="hover:text-primary transition-colors">Dashboard</a>
-                {% if current_user.role in ['admin', 'worker'] %}
-                    <a href="{{ url_for('clients.index') }}" class="hover:text-primary transition-colors">Clients</a>
-                    <a href="{{ url_for('vehicles.index') }}" class="hover:text-primary transition-colors">Vehicles</a>
-                {% endif %}
-                <a href="{{ url_for('policies.list') }}" class="hover:text-primary transition-colors">Policies</a>
-                {% if current_user.role in ['admin', 'worker'] %}
-                    <a href="{{ url_for('policies.expiring') }}" class="hover:text-primary transition-colors">Expiring Soon</a>
-                {% endif %}
-                <a href="{{ url_for('claims.list') }}" class="hover:text-primary transition-colors">Claims</a>
-                {% if current_user.role == 'admin' %}
-                    <a href="{{ url_for('admin.users') }}" class="hover:text-primary transition-colors">Users</a>
-                    <a href="{{ url_for('admin.audit_logs') }}" class="hover:text-primary transition-colors">Audit Logs</a>
-                {% endif %}
+            <div class="hidden lg:flex items-center gap-1 font-medium text-sm">
 
-                {# ── Staff notification bell (customers have no account, hence no bell) ── #}
-                <div class="relative">
-                    <button type="button" id="bell-toggle"
-                            class="relative hover:text-primary transition-colors p-1"
-                            aria-label="Notifications" aria-haspopup="true" aria-expanded="false">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6.002 6.002 0 00-4-5.66V5a2 2 0 10-4 0v.34A6.002 6.002 0 006 11v3.2c0 .53-.2 1.04-.6 1.4L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
-                        </svg>
-                        {% if notif_unread %}
-                            <span class="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center">{{ notif_unread if notif_unread < 100 else '99+' }}</span>
-                        {% endif %}
+                <!-- Listing Dropdown -->
+                <div class="relative group/nav" data-dropdown="listing">
+                    <button type="button" class="nav-link dropdown-toggle" aria-expanded="false" aria-haspopup="true">
+                        <span>Listing</span>
+                        <svg class="w-3.5 h-3.5 text-muted transition-transform duration-200 group-hover/nav:rotate-180" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
                     </button>
-                    <div id="bell-panel" class="hidden absolute right-0 mt-3 w-80 glass rounded-3xl shadow-xl overflow-hidden text-left">
-                        <div class="flex items-center justify-between px-4 py-3 border-b border-divider/60">
-                            <span class="text-sm font-semibold">Notifications</span>
-                            {% if notif_latest %}
-                            <form method="post" action="{{ url_for('notifications.mark_all') }}">
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                <button type="submit" class="text-xs text-primary hover:underline">Mark all read</button>
-                            </form>
+                    <div class="dropdown-menu hidden absolute left-0 top-full -mt-1 pt-3 w-56 z-50">
+                        <div class="glass-dropdown rounded-2xl p-2 shadow-glass-lg border border-slate-200/80">
+                            <a href="{{ url_for('dashboard.index') }}" class="dropdown-item">
+                                <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect width="7" height="9" x="3" y="3" rx="1"></rect><rect width="7" height="5" x="14" y="3" rx="1"></rect><rect width="7" height="9" x="14" y="12" rx="1"></rect><rect width="7" height="5" x="3" y="16" rx="1"></rect></svg>
+                                <span>Dashboard Overview</span>
+                            </a>
+                            {% if current_user.role in ['admin', 'worker'] %}
+                            <a href="{{ url_for('clients.index') }}" class="dropdown-item">
+                                <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path stroke-linecap="round" stroke-linejoin="round" d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path stroke-linecap="round" stroke-linejoin="round" d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                                <span>Clients Directory</span>
+                            </a>
                             {% endif %}
+                            <a href="{{ url_for('claims.list') }}" class="dropdown-item">
+                                <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                                <span>Claims Registry</span>
+                            </a>
                         </div>
-                        <div class="max-h-80 overflow-y-auto divide-y divide-divider/40">
-                            {% for n in notif_latest %}
-                                <div class="px-4 py-3 flex items-start gap-3 {% if n.is_unread %}bg-primary/5{% else %}opacity-60{% endif %}">
-                                    {% set dot = {'error': 'bg-red-500', 'warning': 'bg-accent', 'success': 'bg-emerald-500'} %}
-                                    <span class="mt-1.5 w-2 h-2 rounded-full shrink-0 {{ dot.get(n.severity, 'bg-primary-light') }}"></span>
-                                    <div class="min-w-0">
-                                        <p class="text-sm font-medium truncate">{{ n.title }}</p>
-                                        <p class="text-xs text-muted">{{ n.body }}</p>
-                                        <p class="text-[11px] text-muted mt-0.5">{{ n.created_at.strftime('%d %b %H:%M') if n.created_at }}</p>
-                                    </div>
-                                </div>
-                            {% else %}
-                                <p class="px-4 py-6 text-sm text-muted text-center">You're all caught up.</p>
-                            {% endfor %}
-                        </div>
-                        <a href="{{ url_for('notifications.index') }}"
-                           class="block text-center text-sm font-medium py-3 border-t border-divider/60 hover:bg-background/60 transition-colors">
-                            View all notifications
-                        </a>
                     </div>
                 </div>
 
-                <a href="{{ url_for('auth.logout') }}" class="magnetic-btn bg-ink text-surface px-5 py-2 rounded-full">Logout</a>
-            {% else %}
-                <a href="{{ url_for('auth.login') }}" class="magnetic-btn bg-primary text-surface px-5 py-2 rounded-full">Login</a>
-            {% endif %}
-        </div>
-    </nav>
+                <!-- Vehicles Dropdown -->
+                {% if current_user.role in ['admin', 'worker'] %}
+                <div class="relative group/nav" data-dropdown="vehicles">
+                    <button type="button" class="nav-link dropdown-toggle" aria-expanded="false" aria-haspopup="true">
+                        <span>Vehicles</span>
+                        <svg class="w-3.5 h-3.5 text-muted transition-transform duration-200 group-hover/nav:rotate-180" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <div class="dropdown-menu hidden absolute left-0 top-full -mt-1 pt-3 w-56 z-50">
+                        <div class="glass-dropdown rounded-2xl p-2 shadow-glass-lg border border-slate-200/80">
+                            <a href="{{ url_for('vehicles.index') }}" class="dropdown-item">
+                                <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"></path><circle cx="7" cy="17" r="2"></circle><circle cx="17" cy="17" r="2"></circle></svg>
+                                <span>All Insured Vehicles</span>
+                            </a>
+                            <a href="{{ url_for('vehicles.index') }}?type=private" class="dropdown-item">
+                                <span class="w-2 h-2 rounded-full bg-emerald-500 ml-1 mr-1"></span>
+                                <span>Private Vehicles</span>
+                            </a>
+                            <a href="{{ url_for('vehicles.index') }}?type=commercial" class="dropdown-item">
+                                <span class="w-2 h-2 rounded-full bg-blue-500 ml-1 mr-1"></span>
+                                <span>Commercial Fleet</span>
+                            </a>
+                            <a href="{{ url_for('vehicles.index') }}?type=psv" class="dropdown-item">
+                                <span class="w-2 h-2 rounded-full bg-amber-500 ml-1 mr-1"></span>
+                                <span>PSV Public Service</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
 
-    <!-- Flash Messages -->
-    <div class="fixed top-24 left-1/2 -translate-x-1/2 z-50 w-full max-w-md px-4 flex flex-col gap-2 pointer-events-none" id="flash-container">
+                <!-- Policy Dropdown -->
+                <div class="relative group/nav" data-dropdown="policy">
+                    <button type="button" class="nav-link dropdown-toggle" aria-expanded="false" aria-haspopup="true">
+                        <span>Policy</span>
+                        <svg class="w-3.5 h-3.5 text-muted transition-transform duration-200 group-hover/nav:rotate-180" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <div class="dropdown-menu hidden absolute left-0 top-full -mt-1 pt-3 w-60 z-50">
+                        <div class="glass-dropdown rounded-2xl p-2 shadow-glass-lg border border-slate-200/80">
+                            <a href="{{ url_for('policies.list') }}" class="dropdown-item">
+                                <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                                <span>Issued Policies</span>
+                            </a>
+                            <a href="{{ url_for('policies.underwriting_queue') }}" class="dropdown-item">
+                                <svg class="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path></svg>
+                                <span>Underwriting Review Queue</span>
+                            </a>
+                            <a href="{{ url_for('policies.companies') }}" class="dropdown-item">
+                                <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
+                                <span>Insurance Underwriters</span>
+                            </a>
+                            {% if current_user.role in ['admin', 'worker'] %}
+                            <a href="{{ url_for('policies.expiring') }}" class="dropdown-item">
+                                <svg class="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                                <span>Expiring Soon (≤ 7 Days)</span>
+                            </a>
+                            <a href="{{ url_for('policies.new') }}" class="dropdown-item text-primary font-semibold bg-primary-50/60">
+                                <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                                <span>+ Issue New Policy</span>
+                            </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SMS & Alerts Dropdown -->
+                <div class="relative group/nav" data-dropdown="sms">
+                    <button type="button" class="nav-link dropdown-toggle" aria-expanded="false" aria-haspopup="true">
+                        <span>SMS</span>
+                        <svg class="w-3.5 h-3.5 text-muted transition-transform duration-200 group-hover/nav:rotate-180" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <div class="dropdown-menu hidden absolute left-0 top-full -mt-1 pt-3 w-56 z-50">
+                        <div class="glass-dropdown rounded-2xl p-2 shadow-glass-lg border border-slate-200/80">
+                            <a href="{{ url_for('notifications.index') }}" class="dropdown-item">
+                                <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
+                                <span>SMS & System Logs</span>
+                            </a>
+                            <a href="{{ url_for('policies.expiring') }}" class="dropdown-item">
+                                <svg class="w-4 h-4 text-accent" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6.002 6.002 0 00-4-5.66V5a2 2 0 10-4 0v.34A6.002 6.002 0 006 11v3.2c0 .53-.2 1.04-.6 1.4L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
+                                <span>Renewal Reminders</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Accounts / Finance Dropdown -->
+                <div class="relative group/nav" data-dropdown="accounts">
+                    <button type="button" class="nav-link dropdown-toggle" aria-expanded="false" aria-haspopup="true">
+                        <span>Accounts</span>
+                        <svg class="w-3.5 h-3.5 text-muted transition-transform duration-200 group-hover/nav:rotate-180" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <div class="dropdown-menu hidden absolute left-0 top-full -mt-1 pt-3 w-64 z-50">
+                        <div class="glass-dropdown rounded-2xl p-2 shadow-glass-lg border border-slate-200/80">
+                            <a href="{{ url_for('payments.accounts', tab='balances') }}" class="dropdown-item">
+                                <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                <span>Customer Balances</span>
+                            </a>
+                            <a href="{{ url_for('payments.accounts', tab='invoices') }}" class="dropdown-item">
+                                <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                                <span>Customer Invoices</span>
+                            </a>
+                            <a href="{{ url_for('payments.accounts', tab='paybill') }}" class="dropdown-item">
+                                <svg class="w-4 h-4 text-[#00A859]" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+                                <span>Paybill Payments</span>
+                            </a>
+                            <a href="{{ url_for('payments.accounts', tab='transactions') }}" class="dropdown-item">
+                                <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
+                                <span>All Transactions</span>
+                            </a>
+                            {% if current_user.role == 'admin' %}
+                            <a href="{{ url_for('payments.accounts', tab='ledger') }}" class="dropdown-item border-t border-slate-100 mt-1 pt-2">
+                                <svg class="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
+                                <span class="font-semibold text-amber-700">Accounts Balances (Ledger)</span>
+                            </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Users Dropdown (Admin only) -->
+                {% if current_user.role == 'admin' %}
+                <div class="relative group/nav" data-dropdown="users">
+                    <button type="button" class="nav-link dropdown-toggle" aria-expanded="false" aria-haspopup="true">
+                        <span>Users</span>
+                        <svg class="w-3.5 h-3.5 text-muted transition-transform duration-200 group-hover/nav:rotate-180" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <div class="dropdown-menu hidden absolute right-0 top-full -mt-1 pt-3 w-56 z-50">
+                        <div class="glass-dropdown rounded-2xl p-2 shadow-glass-lg border border-slate-200/80">
+                            <a href="{{ url_for('admin.users') }}" class="dropdown-item">
+                                <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                                <span>Staff Management</span>
+                            </a>
+                            <a href="{{ url_for('admin.audit_logs') }}" class="dropdown-item">
+                                <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                                <span>Audit & Security Logs</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+            </div>
+            {% endif %}
+
+            <!-- Right: Status Pill, Staff Notification Bell & Profile Actions -->
+            <div class="flex items-center gap-2.5 sm:gap-3">
+                {% if current_user.is_authenticated %}
+
+                    <!-- Live Balance Indicator Pill (Admin Only) -->
+                    {% if current_user.role == 'admin' %}
+                    <div class="hidden xl:inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-100/90 border border-slate-200/70 text-xs font-mono font-medium text-ink shadow-subtle-inner" title="System Financial Balance">
+                        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <span class="text-muted">Balance:</span>
+                        <span class="font-semibold text-primary">KES {{ "{:,.2f}".format(system_balance|default(0.00)) }}</span>
+                    </div>
+                    {% endif %}
+
+                    <!-- Staff Notification Bell Dropdown -->
+                    <div class="relative" id="notif-wrapper">
+                        <button type="button" id="bell-toggle"
+                                class="relative w-9 h-9 rounded-full flex items-center justify-center text-ink-secondary hover:text-primary hover:bg-slate-100/80 transition-all apple-btn"
+                                aria-label="Notifications" aria-haspopup="true" aria-expanded="false">
+                            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6.002 6.002 0 00-4-5.66V5a2 2 0 10-4 0v.34A6.002 6.002 0 006 11v3.2c0 .53-.2 1.04-.6 1.4L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+                            </svg>
+                            {% if notif_unread %}
+                                <span class="absolute 0 top-0.5 right-0.5 bg-rose-500 text-white text-[10px] font-bold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center shadow-sm">
+                                    {{ notif_unread if notif_unread < 100 else '99+' }}
+                                </span>
+                            {% endif %}
+                        </button>
+
+                        <!-- Notification Panel (Apple-style Inset Group) -->
+                        <div id="bell-panel" class="hidden absolute right-0 mt-3 w-80 sm:w-96 glass-dropdown rounded-3xl shadow-glass-lg overflow-hidden text-left border border-slate-200/80 z-50 transform origin-top-right transition-all">
+                            <div class="flex items-center justify-between px-5 py-3.5 border-b border-divider bg-slate-50/60">
+                                <div>
+                                    <h4 class="text-sm font-semibold text-ink">Notifications</h4>
+                                    <p class="text-[11px] text-muted">Operational & System alerts</p>
+                                </div>
+                                {% if notif_latest %}
+                                <form method="post" action="{{ url_for('notifications.mark_all') }}">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="text-xs text-primary font-medium hover:underline px-2 py-1 rounded-lg hover:bg-primary-50 transition-colors">Mark all read</button>
+                                </form>
+                                {% endif %}
+                            </div>
+                            <div class="max-h-80 overflow-y-auto divide-y divide-slate-100 p-1.5">
+                                {% for n in notif_latest %}
+                                    <div class="p-3 rounded-2xl flex items-start gap-3 transition-colors {% if n.is_unread %}bg-primary-50/50 hover:bg-primary-50/80{% else %}hover:bg-slate-50 opacity-75{% endif %}">
+                                        {% set dot = {'error': 'bg-rose-500 ring-rose-200', 'warning': 'bg-amber-500 ring-amber-200', 'success': 'bg-emerald-500 ring-emerald-200'} %}
+                                        <span class="mt-1.5 w-2.5 h-2.5 rounded-full shrink-0 ring-4 {{ dot.get(n.severity, 'bg-primary ring-blue-100') }}"></span>
+                                        <div class="min-w-0 flex-1">
+                                            <p class="text-xs font-semibold text-ink truncate">{{ n.title }}</p>
+                                            <p class="text-[11px] text-muted mt-0.5 line-clamp-2">{{ n.body }}</p>
+                                            <p class="text-[10px] text-muted-light font-mono mt-1">{{ n.created_at.strftime('%d %b • %H:%M') if n.created_at }}</p>
+                                        </div>
+                                    </div>
+                                {% else %}
+                                    <div class="py-8 text-center">
+                                        <svg class="w-8 h-8 text-slate-300 mx-auto mb-2" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6.002 6.002 0 00-4-5.66V5a2 2 0 10-4 0v.34A6.002 6.002 0 006 11v3.2c0 .53-.2 1.04-.6 1.4L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+                                        <p class="text-xs text-muted font-medium">You're all caught up.</p>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                            <a href="{{ url_for('notifications.index') }}"
+                               class="block text-center text-xs font-semibold py-3 border-t border-divider text-primary hover:bg-slate-50 transition-colors">
+                                View all notification logs &rarr;
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- User Role Chip & Logout (Desktop) -->
+                    <div class="hidden md:flex items-center gap-2 pl-2 border-l border-slate-200/80">
+                        <div class="flex flex-col text-right">
+                            <span class="text-xs font-semibold text-ink leading-tight">{{ current_user.full_name }}</span>
+                            <span class="text-[10px] text-muted uppercase tracking-wider font-mono">{{ current_user.role }}</span>
+                        </div>
+                        <a href="{{ url_for('auth.logout') }}" class="apple-btn bg-ink hover:bg-slate-800 text-surface text-xs font-medium px-4 py-2 rounded-full shadow-sm transition-all ml-1">
+                            Logout
+                        </a>
+                    </div>
+
+                    <!-- Mobile Hamburger Button -->
+                    <button type="button" id="mobile-menu-open" class="lg:hidden w-9 h-9 rounded-full flex items-center justify-center text-ink-secondary hover:text-primary hover:bg-slate-100/80 apple-btn focus:outline-none" aria-label="Open mobile navigation menu">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"></path>
+                        </svg>
+                    </button>
+
+                {% else %}
+                    <a href="{{ url_for('auth.login') }}" class="apple-btn bg-primary hover:bg-primary-dark text-surface text-xs sm:text-sm font-semibold px-5 py-2 sm:py-2.5 rounded-full shadow-sm transition-all">
+                        Sign In
+                    </a>
+                {% endif %}
+            </div>
+        </nav>
+    </header>
+
+    <!-- Mobile Navigation Drawer Menu (Apple-Style Slide-In) -->
+    <div id="mobile-drawer-backdrop" class="fixed inset-0 z-50 bg-ink/40 backdrop-blur-md hidden opacity-0 transition-opacity duration-300">
+        <div id="mobile-drawer" class="fixed inset-y-0 right-0 w-full max-w-sm glass-dropdown shadow-2xl p-6 flex flex-col justify-between transform translate-x-full transition-transform duration-300 ease-apple-spring overflow-y-auto">
+
+            <!-- Drawer Header -->
+            <div>
+                <div class="flex items-center justify-between pb-4 border-b border-divider">
+                    <div class="flex items-center gap-2">
+                        <img src="{{ url_for('static', filename='img/westlake-icon.png') }}" alt="Westlake Icon" class="h-7 w-auto">
+                        <div>
+                            <span class="font-display font-bold text-sm text-ink block">Policy Guard</span>
+                            <span class="text-[10px] text-muted font-mono">Westlake Portal</span>
+                        </div>
+                    </div>
+                    <button type="button" id="mobile-menu-close" class="w-8 h-8 rounded-full border border-divider flex items-center justify-center text-muted hover:text-ink hover:bg-slate-100 transition-all apple-btn" aria-label="Close menu">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- User Information Card in Drawer -->
+                {% if current_user.is_authenticated %}
+                <div class="my-4 p-3.5 rounded-2xl bg-slate-100/80 border border-slate-200/60 flex items-center justify-between">
+                    <div>
+                        <p class="text-xs font-bold text-ink">{{ current_user.full_name }}</p>
+                        <p class="text-[11px] text-muted">{{ current_user.email }}</p>
+                    </div>
+                    <span class="text-[10px] uppercase font-mono font-bold px-2 py-0.5 rounded-full bg-primary-50 text-primary border border-primary/20">
+                        {{ current_user.role }}
+                    </span>
+                </div>
+
+                <!-- Collapsible Navigation Accordions -->
+                <div class="flex flex-col gap-1 text-sm font-medium">
+
+                    <!-- Listing Group -->
+                    <div class="drawer-group">
+                        <button type="button" class="w-full flex items-center justify-between py-2.5 px-3 rounded-xl text-ink font-semibold hover:bg-slate-100/70 drawer-accordion-btn">
+                            <span class="flex items-center gap-2.5">
+                                <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect width="7" height="9" x="3" y="3" rx="1"></rect><rect width="7" height="5" x="14" y="3" rx="1"></rect><rect width="7" height="9" x="14" y="12" rx="1"></rect><rect width="7" height="5" x="3" y="16" rx="1"></rect></svg>
+                                Listing
+                            </span>
+                            <svg class="w-4 h-4 text-muted transition-transform duration-200 drawer-arrow" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
+                        </button>
+                        <div class="drawer-sublinks pl-6 py-1 flex flex-col gap-1">
+                            <a href="{{ url_for('dashboard.index') }}" class="py-2 px-3 text-xs text-ink-secondary hover:text-primary rounded-lg hover:bg-slate-100/70">Dashboard Overview</a>
+                            {% if current_user.role in ['admin', 'worker'] %}
+                            <a href="{{ url_for('clients.index') }}" class="py-2 px-3 text-xs text-ink-secondary hover:text-primary rounded-lg hover:bg-slate-100/70">Clients Directory</a>
+                            {% endif %}
+                            <a href="{{ url_for('claims.list') }}" class="py-2 px-3 text-xs text-ink-secondary hover:text-primary rounded-lg hover:bg-slate-100/70">Claims Registry</a>
+                        </div>
+                    </div>
+
+                    <!-- Vehicles Group -->
+                    {% if current_user.role in ['admin', 'worker'] %}
+                    <div class="drawer-group">
+                        <button type="button" class="w-full flex items-center justify-between py-2.5 px-3 rounded-xl text-ink font-semibold hover:bg-slate-100/70 drawer-accordion-btn">
+                            <span class="flex items-center gap-2.5">
+                                <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"></path><circle cx="7" cy="17" r="2"></circle><circle cx="17" cy="17" r="2"></circle></svg>
+                                Vehicles
+                            </span>
+                            <svg class="w-4 h-4 text-muted transition-transform duration-200 drawer-arrow" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
+                        </button>
+                        <div class="drawer-sublinks pl-6 py-1 flex flex-col gap-1">
+                            <a href="{{ url_for('vehicles.index') }}" class="py-2 px-3 text-xs text-ink-secondary hover:text-primary rounded-lg hover:bg-slate-100/70">Vehicle Registry</a>
+                            <a href="{{ url_for('vehicles.index') }}?type=private" class="py-2 px-3 text-xs text-ink-secondary hover:text-primary rounded-lg hover:bg-slate-100/70">Private Vehicles</a>
+                            <a href="{{ url_for('vehicles.index') }}?type=commercial" class="py-2 px-3 text-xs text-ink-secondary hover:text-primary rounded-lg hover:bg-slate-100/70">Commercial Fleet</a>
+                            <a href="{{ url_for('vehicles.index') }}?type=psv" class="py-2 px-3 text-xs text-ink-secondary hover:text-primary rounded-lg hover:bg-slate-100/70">PSV Public Service</a>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Policy Group -->
+                    <div class="drawer-group">
+                        <button type="button" class="w-full flex items-center justify-between py-2.5 px-3 rounded-xl text-ink font-semibold hover:bg-slate-100/70 drawer-accordion-btn">
+                            <span class="flex items-center gap-2.5">
+                                <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                                Policies
+                            </span>
+                            <svg class="w-4 h-4 text-muted transition-transform duration-200 drawer-arrow" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
+                        </button>
+                        <div class="drawer-sublinks pl-6 py-1 flex flex-col gap-1">
+                            <a href="{{ url_for('policies.list') }}" class="py-2 px-3 text-xs text-ink-secondary hover:text-primary rounded-lg hover:bg-slate-100/70">Issued Policies</a>
+                            <a href="{{ url_for('policies.companies') }}" class="py-2 px-3 text-xs text-ink-secondary hover:text-primary rounded-lg hover:bg-slate-100/70">Insurance Underwriters</a>
+                            {% if current_user.role in ['admin', 'worker'] %}
+                            <a href="{{ url_for('policies.expiring') }}" class="py-2 px-3 text-xs text-ink-secondary hover:text-primary rounded-lg hover:bg-slate-100/70">Expiring Soon</a>
+                            <a href="{{ url_for('policies.new') }}" class="py-2 px-3 text-xs text-primary font-semibold rounded-lg bg-primary-50/70">+ Issue New Policy</a>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- SMS & Notifications Group -->
+                    <div class="drawer-group">
+                        <button type="button" class="w-full flex items-center justify-between py-2.5 px-3 rounded-xl text-ink font-semibold hover:bg-slate-100/70 drawer-accordion-btn">
+                            <span class="flex items-center gap-2.5">
+                                <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
+                                SMS & Alerts
+                            </span>
+                            <svg class="w-4 h-4 text-muted transition-transform duration-200 drawer-arrow" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
+                        </button>
+                        <div class="drawer-sublinks pl-6 py-1 flex flex-col gap-1">
+                            <a href="{{ url_for('notifications.index') }}" class="py-2 px-3 text-xs text-ink-secondary hover:text-primary rounded-lg hover:bg-slate-100/70">All Notifications</a>
+                            <a href="{{ url_for('policies.expiring') }}" class="py-2 px-3 text-xs text-ink-secondary hover:text-primary rounded-lg hover:bg-slate-100/70">Expiry Reminders</a>
+                        </div>
+                    </div>
+
+                    <!-- Accounts Group -->
+                    <div class="drawer-group">
+                        <button type="button" class="w-full flex items-center justify-between py-2.5 px-3 rounded-xl text-ink font-semibold hover:bg-slate-100/70 drawer-accordion-btn">
+                            <span class="flex items-center gap-2.5">
+                                <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                Accounts
+                            </span>
+                            <svg class="w-4 h-4 text-muted transition-transform duration-200 drawer-arrow" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
+                        </button>
+                        <div class="drawer-sublinks pl-6 py-1 flex flex-col gap-1">
+                            <a href="{{ url_for('payments.accounts') }}" class="py-2 px-3 text-xs text-ink-secondary hover:text-primary rounded-lg hover:bg-slate-100/70">Accounts & Paybill Ledger</a>
+                            <a href="{{ url_for('payments.accounts') }}" class="py-2 px-3 text-xs text-ink-secondary hover:text-primary rounded-lg hover:bg-slate-100/70">Receivables & Overdue</a>
+                        </div>
+                    </div>
+
+                    <!-- Admin Group -->
+                    {% if current_user.role == 'admin' %}
+                    <div class="drawer-group">
+                        <button type="button" class="w-full flex items-center justify-between py-2.5 px-3 rounded-xl text-ink font-semibold hover:bg-slate-100/70 drawer-accordion-btn">
+                            <span class="flex items-center gap-2.5">
+                                <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                                Administration
+                            </span>
+                            <svg class="w-4 h-4 text-muted transition-transform duration-200 drawer-arrow" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
+                        </button>
+                        <div class="drawer-sublinks pl-6 py-1 flex flex-col gap-1">
+                            <a href="{{ url_for('admin.users') }}" class="py-2 px-3 text-xs text-ink-secondary hover:text-primary rounded-lg hover:bg-slate-100/70">Staff Accounts</a>
+                            <a href="{{ url_for('admin.audit_logs') }}" class="py-2 px-3 text-xs text-ink-secondary hover:text-primary rounded-lg hover:bg-slate-100/70">Audit Logs</a>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Drawer Footer -->
+            <div class="pt-6 border-t border-divider flex flex-col gap-3">
+                {% if current_user.is_authenticated %}
+                <a href="{{ url_for('auth.logout') }}" class="apple-btn w-full bg-ink hover:bg-slate-800 text-surface text-center py-2.5 rounded-full text-xs font-semibold shadow-sm">
+                    Sign Out
+                </a>
+                {% else %}
+                <a href="{{ url_for('auth.login') }}" class="apple-btn w-full bg-primary text-surface text-center py-2.5 rounded-full text-xs font-semibold shadow-sm">
+                    Sign In
+                </a>
+                {% endif %}
+                <p class="text-center text-[10px] text-muted font-mono">Policy Guard Enterprise &copy; 2026</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Flash Messages (Apple-Style Floating Toasts) -->
+    <div class="fixed top-20 sm:top-24 left-1/2 -translate-x-1/2 z-50 w-full max-w-md px-4 flex flex-col gap-2 pointer-events-none" id="flash-container">
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
-                    {% set bg_color = 'bg-primary text-surface' if category == 'success' else ('bg-accent text-ink' if category == 'warning' else 'bg-red-500 text-surface') %}
-                    <div class="glass shadow-lg rounded-2xl p-4 flex items-start gap-3 pointer-events-auto transform translate-y-[-20px] opacity-0 flash-msg">
-                        <div class="flex-1 text-sm font-medium">{{ message }}</div>
+                    {% set icon_color = 'text-primary' if category == 'success' else ('text-accent' if category == 'warning' else 'text-rose-500') %}
+                    {% set border_accent = 'border-primary/20' if category == 'success' else ('border-accent/20' if category == 'warning' else 'border-rose-500/20') %}
+                    <div class="glass-dropdown shadow-glass-lg rounded-2xl p-4 flex items-start gap-3 pointer-events-auto transform translate-y-[-20px] opacity-0 flash-msg border {{ border_accent }}">
+                        {% if category == 'success' %}
+                            <svg class="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        {% elif category == 'warning' %}
+                            <svg class="w-5 h-5 text-amber-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                        {% else %}
+                            <svg class="w-5 h-5 text-rose-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        {% endif %}
+                        <div class="flex-1 text-xs sm:text-sm font-medium text-ink leading-relaxed">{{ message }}</div>
                     </div>
                 {% endfor %}
             {% endif %}
         {% endwith %}
     </div>
 
-    <!-- Main Content -->
-    <main class="flex-1 pt-28 pb-12 px-4 md:px-8 max-w-7xl mx-auto w-full">
+    <!-- Main Content Container -->
+    <main class="flex-1 pt-24 sm:pt-28 pb-16 px-4 sm:px-6 md:px-8 max-w-7xl mx-auto w-full">
         {% block content %}{% endblock %}
     </main>
 
-    <!-- Footer -->
-    <footer class="glass-dark text-surface py-8 mt-auto rounded-t-3xl border-t-0">
-        <div class="max-w-7xl mx-auto px-6 md:px-8 flex flex-col md:flex-row justify-between items-center gap-4">
-            <div class="flex items-center gap-2">
-                <span class="inline-flex items-center justify-center bg-surface rounded-lg p-1.5">
-                    <img src="{{ url_for('static', filename='img/westlake-icon.png') }}" alt="Westlake Insurance Agency" class="h-5 w-auto">
+    <!-- Global Apple-Style Footer -->
+    <footer class="glass-dark text-slate-300 py-8 mt-auto border-t border-slate-800">
+        <div class="max-w-7xl mx-auto px-6 md:px-8 flex flex-col md:flex-row justify-between items-center gap-4 text-xs">
+            <div class="flex items-center gap-3">
+                <span class="inline-flex items-center justify-center bg-white/10 rounded-lg p-1.5 backdrop-blur-sm">
+                    <img src="{{ url_for('static', filename='img/westlake-icon.png') }}" alt="Westlake Insurance Agency" class="h-4 w-auto">
                 </span>
-                <span class="font-display font-semibold text-sm">Westlake Insurance Agency</span>
+                <span class="font-display font-semibold text-white tracking-wide">Westlake Insurance Agency</span>
+                <span class="text-slate-500 hidden sm:inline">&bull;</span>
+                <span class="text-slate-400 hidden sm:inline">Policy Guard Enterprise v2.4</span>
             </div>
-            <div class="text-xs text-muted">
-                <span>Policy Guard &copy; 2026 &middot; Secure Enterprise Portal</span>
+            <div class="text-slate-400 flex items-center gap-4">
+                <span>Secure ISO-27001 Compliant Portal</span>
+                <span>&copy; 2026 All Rights Reserved</span>
             </div>
         </div>
     </footer>
 
-    <!-- Global Animations -->
+    <!-- Global Interactivity Scripts -->
     <script>
         gsap.registerPlugin(ScrollTrigger);
 
@@ -242,39 +647,159 @@
             gsap.to(flashMsgs, {
                 y: 0,
                 opacity: 1,
-                duration: 0.5,
-                stagger: 0.1,
-                ease: "back.out(1.5)"
+                duration: 0.4,
+                stagger: 0.08,
+                ease: "back.out(1.4)"
             });
-            // Auto hide after 4s
+            // Auto hide after 4.5s
             setTimeout(() => {
                 gsap.to(flashMsgs, {
                     opacity: 0,
-                    y: -20,
+                    y: -15,
                     duration: 0.3,
-                    stagger: 0.1,
+                    stagger: 0.05,
                     ease: "power2.in"
                 });
-            }, 4000);
+            }, 4500);
         }
-        
-        // Page entrance animation
+
+        // Page content entrance animation
         gsap.from("main > *", {
-            y: 30,
+            y: 20,
             opacity: 0,
-            duration: 0.8,
+            duration: 0.6,
             ease: "power3.out",
-            stagger: 0.1
+            stagger: 0.08
         });
 
-        // Staff notification bell toggle (vanilla JS — no Alpine in this stack)
+        // Desktop Dropdowns handling (hover-intent: overlapping bridge + close delay
+        // so diagonal cursor travel never kills the menu mid-flight)
+        const NAV_CLOSE_DELAY = 220;
+        const navDropdowns = document.querySelectorAll('.group\\/nav');
+        const closeNavMenu = (dropdown) => {
+            const menu = dropdown.querySelector('.dropdown-menu');
+            const btn = dropdown.querySelector('.dropdown-toggle');
+            if (menu) menu.classList.add('hidden');
+            if (btn) btn.setAttribute('aria-expanded', 'false');
+            if (dropdown._closeTimer) {
+                clearTimeout(dropdown._closeTimer);
+                dropdown._closeTimer = null;
+            }
+        };
+        const openNavMenu = (dropdown) => {
+            // Close all other dropdowns immediately
+            navDropdowns.forEach(other => {
+                if (other !== dropdown) closeNavMenu(other);
+            });
+            const menu = dropdown.querySelector('.dropdown-menu');
+            const btn = dropdown.querySelector('.dropdown-toggle');
+            if (dropdown._closeTimer) {
+                clearTimeout(dropdown._closeTimer);
+                dropdown._closeTimer = null;
+            }
+            if (menu) menu.classList.remove('hidden');
+            if (btn) btn.setAttribute('aria-expanded', 'true');
+        };
+        navDropdowns.forEach(dropdown => {
+            const btn = dropdown.querySelector('.dropdown-toggle');
+            const menu = dropdown.querySelector('.dropdown-menu');
+            if (btn && menu) {
+                // Toggle on click for touch screens / pointer
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const isClosed = menu.classList.contains('hidden');
+                    if (isClosed) {
+                        openNavMenu(dropdown);
+                    } else {
+                        closeNavMenu(dropdown);
+                    }
+                });
+
+                dropdown.addEventListener('mouseenter', () => {
+                    openNavMenu(dropdown);
+                });
+                dropdown.addEventListener('mouseleave', () => {
+                    // Grace period: lets the cursor cross the bridge diagonally
+                    // without the menu snapping shut.
+                    if (dropdown._closeTimer) clearTimeout(dropdown._closeTimer);
+                    dropdown._closeTimer = setTimeout(() => closeNavMenu(dropdown), NAV_CLOSE_DELAY);
+                });
+
+                // Keyboard access: keep open while focus is inside
+                dropdown.addEventListener('focusin', () => {
+                    openNavMenu(dropdown);
+                });
+                dropdown.addEventListener('focusout', (e) => {
+                    if (!dropdown.contains(e.relatedTarget)) closeNavMenu(dropdown);
+                });
+            }
+        });
+
+        // Close dropdowns on outside click or escape
+        document.addEventListener('click', () => {
+            navDropdowns.forEach(closeNavMenu);
+        });
+
+        // Global Apple-Style Non-blocking Toast Notification Dispatcher
+        window.showToast = function(message, type = 'success') {
+            let container = document.getElementById('flash-container');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'flash-container';
+                container.className = 'fixed top-20 sm:top-24 left-1/2 -translate-x-1/2 z-50 w-full max-w-md px-4 flex flex-col gap-2 pointer-events-none';
+                document.body.appendChild(container);
+            }
+
+            const toast = document.createElement('div');
+            const borderAccent = type === 'success' ? 'border-emerald-200 bg-emerald-50/95 text-emerald-950' :
+                               (type === 'warning' ? 'border-amber-200 bg-amber-50/95 text-amber-950' :
+                               'border-rose-200 bg-rose-50/95 text-rose-950');
+
+            const iconHtml = type === 'success' ?
+                '<svg class="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>' :
+                (type === 'warning' ?
+                '<svg class="w-5 h-5 text-amber-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>' :
+                '<svg class="w-5 h-5 text-rose-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>');
+
+            toast.className = `glass-dropdown shadow-glass-lg rounded-2xl p-4 flex items-start gap-3 pointer-events-auto transform translate-y-[-20px] opacity-0 border ${borderAccent} transition-all duration-300`;
+            toast.innerHTML = `
+                ${iconHtml}
+                <div class="flex-1 text-xs sm:text-sm font-medium leading-relaxed">${message}</div>
+                <button type="button" class="text-muted hover:text-ink text-xs p-1" onclick="this.parentElement.remove()">&times;</button>
+            `;
+
+            container.appendChild(toast);
+
+            // Animate in
+            requestAnimationFrame(() => {
+                toast.classList.remove('translate-y-[-20px]', 'opacity-0');
+                toast.classList.add('translate-y-0', 'opacity-100');
+            });
+
+            // Auto dismiss after 4.5 seconds
+            setTimeout(() => {
+                toast.classList.remove('translate-y-0', 'opacity-100');
+                toast.classList.add('translate-y-[-20px]', 'opacity-0');
+                setTimeout(() => toast.remove(), 350);
+            }, 4500);
+        };
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                navDropdowns.forEach(closeNavMenu);
+                const bellPanel = document.getElementById('bell-panel');
+                if (bellPanel) bellPanel.classList.add('hidden');
+                closeMobileDrawer();
+            }
+        });
+
+        // Notification Bell Handler
         const bellToggle = document.getElementById('bell-toggle');
         const bellPanel = document.getElementById('bell-panel');
         if (bellToggle && bellPanel) {
             bellToggle.addEventListener('click', (e) => {
                 e.stopPropagation();
-                const hidden = bellPanel.classList.toggle('hidden');
-                bellToggle.setAttribute('aria-expanded', String(!hidden));
+                const isHidden = bellPanel.classList.toggle('hidden');
+                bellToggle.setAttribute('aria-expanded', String(!isHidden));
             });
             document.addEventListener('click', (e) => {
                 if (!bellPanel.contains(e.target)) {
@@ -282,15 +807,60 @@
                     bellToggle.setAttribute('aria-expanded', 'false');
                 }
             });
-            document.addEventListener('keydown', (e) => {
-                if (e.key === 'Escape') {
-                    bellPanel.classList.add('hidden');
-                    bellToggle.setAttribute('aria-expanded', 'false');
-                }
+        }
+
+        // Mobile Drawer Menu
+        const mobileOpenBtn = document.getElementById('mobile-menu-open');
+        const mobileCloseBtn = document.getElementById('mobile-menu-close');
+        const mobileBackdrop = document.getElementById('mobile-drawer-backdrop');
+        const mobileDrawer = document.getElementById('mobile-drawer');
+
+        function openMobileDrawer() {
+            if (!mobileBackdrop || !mobileDrawer) return;
+            mobileBackdrop.classList.remove('hidden');
+            setTimeout(() => {
+                mobileBackdrop.classList.remove('opacity-0');
+                mobileBackdrop.classList.add('opacity-100');
+                mobileDrawer.classList.remove('translate-x-full');
+            }, 10);
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeMobileDrawer() {
+            if (!mobileBackdrop || !mobileDrawer) return;
+            mobileBackdrop.classList.remove('opacity-100');
+            mobileBackdrop.classList.add('opacity-0');
+            mobileDrawer.classList.add('translate-x-full');
+            setTimeout(() => {
+                mobileBackdrop.classList.add('hidden');
+                document.body.style.overflow = '';
+            }, 300);
+        }
+
+        if (mobileOpenBtn) mobileOpenBtn.addEventListener('click', openMobileDrawer);
+        if (mobileCloseBtn) mobileCloseBtn.addEventListener('click', closeMobileDrawer);
+        if (mobileBackdrop) {
+            mobileBackdrop.addEventListener('click', (e) => {
+                if (e.target === mobileBackdrop) closeMobileDrawer();
             });
         }
+
+        // Mobile drawer accordion toggles
+        const accordionBtns = document.querySelectorAll('.drawer-accordion-btn');
+        accordionBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const sublinks = btn.nextElementSibling;
+                const arrow = btn.querySelector('.drawer-arrow');
+                if (sublinks) {
+                    const isHidden = sublinks.classList.toggle('hidden');
+                    if (arrow) {
+                        arrow.style.transform = isHidden ? 'rotate(0deg)' : 'rotate(180deg)';
+                    }
+                }
+            });
+        });
     </script>
-    
+
     {% block scripts %}{% endblock %}
 </body>
 </html>

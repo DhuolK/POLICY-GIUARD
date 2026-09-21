@@ -1,5 +1,6 @@
 from flask import Blueprint, render_template, request, jsonify, abort, redirect, url_for, flash
 from flask_login import login_required, current_user
+from app.utils.redirects import safe_redirect
 from bson import ObjectId
 from app.extensions import get_db
 from ..services.client_service import ClientService
@@ -140,7 +141,7 @@ def assign(client_id):
     client, err = ClientService.assign_worker(client_id, worker_id)
     if err:
         flash(err, "error")
-        return redirect(request.referrer or url_for('clients.index'))
+        return safe_redirect(url_for('clients.index'))
 
     AuditService.log_action(
         entity_type='client', entity_id=client_id, action='assign_worker',
@@ -156,7 +157,7 @@ def assign(client_id):
         else f"{client.get('full_name')} is now unassigned.",
         "success"
     )
-    return redirect(request.referrer or url_for('clients.index'))
+    return safe_redirect(url_for('clients.index'))
 
 
 @clients_bp.route('/<client_id>')

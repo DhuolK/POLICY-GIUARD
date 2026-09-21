@@ -1,107 +1,164 @@
 {% extends 'base.html' %}
 
+{% block title %}Dashboard — Policy Guard{% endblock %}
+
 {% block content %}
-<div class="flex flex-col gap-8">
-    <header class="flex justify-between items-end">
+<div class="flex flex-col gap-8 max-w-7xl mx-auto w-full">
+
+    <!-- Dashboard Header -->
+    <header class="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 pb-2 border-b border-divider/60">
         <div>
-            <h1 class="text-4xl font-display font-bold text-ink">Dashboard</h1>
-            <p class="text-muted mt-1">Welcome back, {{ current_user.full_name }} ({{ current_user.role|title }})</p>
+            <div class="flex items-center gap-2 text-xs text-muted font-medium mb-1">
+                <span>Overview</span>
+                <span>&rsaquo;</span>
+                <span class="text-ink font-semibold">Executive Dashboard</span>
+            </div>
+            <h1 class="text-3xl sm:text-4xl font-display font-bold text-ink tracking-tight">Executive Dashboard</h1>
+            <p class="text-muted text-xs sm:text-sm mt-1">Welcome back, <strong class="text-ink font-semibold">{{ current_user.full_name }}</strong> &bull; <span class="capitalize font-mono text-[11px] px-2 py-0.5 rounded-full bg-slate-100 border border-slate-200">{{ current_user.role }}</span></p>
         </div>
-        
-        {% if current_user.role in ['admin', 'worker'] %}
-        <div class="flex gap-4">
-            <a href="{{ url_for('policies.new') }}" class="magnetic-btn bg-primary text-surface px-6 py-2.5 rounded-full font-medium shadow-sm hover:shadow-md transition-shadow">
-                + Add Issued Policy
+
+        <div class="flex items-center gap-3 w-full sm:w-auto">
+            {% if current_user.role in ['admin', 'worker'] %}
+            <a href="{{ url_for('policies.new') }}" class="apple-btn flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-full text-xs font-semibold text-surface bg-primary hover:bg-primary-dark shadow-sm transition-all">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                <span>Issue New Policy</span>
             </a>
-        </div>
-        {% else %}
-        <div class="flex gap-4">
-            <a href="{{ url_for('claims.new') }}" class="magnetic-btn bg-accent text-surface px-6 py-2.5 rounded-full font-medium shadow-sm hover:shadow-md transition-shadow">
+            {% else %}
+            <a href="{{ url_for('claims.new') }}" class="apple-btn flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-full text-xs font-semibold text-surface bg-accent hover:bg-accent-dark shadow-sm transition-all">
                 File a Claim
             </a>
+            {% endif %}
         </div>
-        {% endif %}
     </header>
 
     {% if current_user.role == 'admin' %}
-    <!-- Stats Grid (Admin Only) -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <!-- Stat Card 1 -->
-        <div onclick="showPaymentsModal('receivable')" class="glass p-6 rounded-3xl lift-on-hover cursor-pointer border border-transparent hover:border-primary/20 transition-all select-none">
-            <div class="w-12 h-12 bg-primary/10 text-primary rounded-2xl flex items-center justify-center mb-4">
-                <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-                </svg>
+    <!-- Admin Financial Metrics KPI Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <!-- Stat Card 1: Total Receivable -->
+        <div onclick="showPaymentsModal('receivable')" class="glass-panel p-6 rounded-3xl cursor-pointer hover:border-primary/40 transition-all select-none shadow-apple-card hover:shadow-apple-hover group relative overflow-hidden">
+            <div class="flex items-center justify-between mb-4">
+                <span class="text-[11px] font-semibold text-muted uppercase tracking-wider">Total Receivable</span>
+                <span class="w-10 h-10 rounded-2xl bg-primary-50 text-primary flex items-center justify-center group-hover:scale-105 transition-transform">
+                    <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                    </svg>
+                </span>
             </div>
-            <p class="text-muted text-sm font-medium flex justify-between items-center">
-                <span>Total Receivable</span>
-                <span class="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-semibold">View Details</span>
-            </p>
-            <p class="text-3xl font-display font-bold mt-1 text-ink">KSh <span class="count-up">{{ stats.total_receivable|int }}</span></p>
+            <div class="flex flex-col">
+                <p class="text-3xl font-display font-bold text-ink tracking-tight font-mono">
+                    KES <span class="count-up">{{ stats.total_receivable|int }}</span>
+                </p>
+                <div class="flex items-center justify-between mt-3 pt-3 border-t border-divider/60 text-xs">
+                    <span class="text-muted">Uncollected dues</span>
+                    <span class="text-primary font-semibold group-hover:underline flex items-center gap-0.5">
+                        <span>View Records</span>
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"></path></svg>
+                    </span>
+                </div>
+            </div>
         </div>
-        
-        <!-- Stat Card 2 -->
-        <div onclick="showPaymentsModal('overdue')" class="glass p-6 rounded-3xl lift-on-hover cursor-pointer border border-transparent hover:border-accent/20 transition-all select-none">
-            <div class="w-12 h-12 bg-accent/10 text-accent rounded-2xl flex items-center justify-center mb-4">
-                <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="10"></circle>
-                    <polyline points="12 6 12 12 16 14"></polyline>
-                </svg>
+
+        <!-- Stat Card 2: Total Overdue -->
+        <div onclick="showPaymentsModal('overdue')" class="glass-panel p-6 rounded-3xl cursor-pointer hover:border-amber-500/40 transition-all select-none shadow-apple-card hover:shadow-apple-hover group relative overflow-hidden">
+            <div class="flex items-center justify-between mb-4">
+                <span class="text-[11px] font-semibold text-muted uppercase tracking-wider">Total Overdue</span>
+                <span class="w-10 h-10 rounded-2xl bg-amber-500/10 text-amber-600 flex items-center justify-center group-hover:scale-105 transition-transform">
+                    <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <polyline points="12 6 12 12 16 14"></polyline>
+                    </svg>
+                </span>
             </div>
-            <p class="text-muted text-sm font-medium flex justify-between items-center">
-                <span>Total Overdue</span>
-                <span class="text-xs bg-accent/10 text-accent px-2 py-0.5 rounded-full font-semibold">View Details</span>
-            </p>
-            <p class="text-3xl font-display font-bold mt-1 text-ink">KSh <span class="count-up">{{ stats.total_overdue|int }}</span></p>
+            <div class="flex flex-col">
+                <p class="text-3xl font-display font-bold text-amber-600 tracking-tight font-mono">
+                    KES <span class="count-up">{{ stats.total_overdue|int }}</span>
+                </p>
+                <div class="flex items-center justify-between mt-3 pt-3 border-t border-divider/60 text-xs">
+                    <span class="text-muted">Lapsed deadlines</span>
+                    <span class="text-amber-600 font-semibold group-hover:underline flex items-center gap-0.5">
+                        <span>View Records</span>
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"></path></svg>
+                    </span>
+                </div>
+            </div>
         </div>
-        
-        <!-- Stat Card 3 -->
-        <div onclick="showPaymentsModal('paid')" class="glass p-6 rounded-3xl lift-on-hover cursor-pointer border border-transparent hover:border-green-500/20 transition-all select-none">
-            <div class="w-12 h-12 bg-green-500/10 text-green-600 rounded-2xl flex items-center justify-center mb-4">
-                <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-                    <polyline points="22 4 12 14.01 9 11.01"></polyline>
-                </svg>
+
+        <!-- Stat Card 3: Completed Collections -->
+        <div onclick="showPaymentsModal('paid')" class="glass-panel p-6 rounded-3xl cursor-pointer hover:border-emerald-500/40 transition-all select-none shadow-apple-card hover:shadow-apple-hover group relative overflow-hidden">
+            <div class="flex items-center justify-between mb-4">
+                <span class="text-[11px] font-semibold text-muted uppercase tracking-wider">Collected Revenue</span>
+                <span class="w-10 h-10 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center group-hover:scale-105 transition-transform">
+                    <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                        <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                    </svg>
+                </span>
             </div>
-            <p class="text-muted text-sm font-medium flex justify-between items-center">
-                <span>Completed Payments</span>
-                <span class="text-xs bg-green-500/10 text-green-600 px-2 py-0.5 rounded-full font-semibold">View Details</span>
-            </p>
-            <p class="text-3xl font-display font-bold mt-1 text-ink">KSh <span class="count-up">{{ stats.total_transactions|int }}</span></p>
+            <div class="flex flex-col">
+                <p class="text-3xl font-display font-bold text-emerald-600 tracking-tight font-mono">
+                    KES <span class="count-up">{{ stats.total_transactions|int }}</span>
+                </p>
+                <div class="flex items-center justify-between mt-3 pt-3 border-t border-divider/60 text-xs">
+                    <span class="text-muted">Settled premiums</span>
+                    <span class="text-emerald-600 font-semibold group-hover:underline flex items-center gap-0.5">
+                        <span>View Records</span>
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"></path></svg>
+                    </span>
+                </div>
+            </div>
         </div>
     </div>
 
-    <!-- Recent Activity Section (Admin Only) -->
-    <section class="mt-4">
-        <h2 class="text-xl font-display font-semibold mb-6">Recent Activity</h2>
-        <div class="glass rounded-3xl p-1 overflow-hidden">
+    <!-- Recent Activity / Transactions Section -->
+    <section class="flex flex-col gap-4">
+        <div class="flex justify-between items-center">
+            <div>
+                <h2 class="text-lg font-display font-bold text-ink">Recent Premium Transactions</h2>
+                <p class="text-xs text-muted">Latest verified customer premium payments reconciled across accounts</p>
+            </div>
+        </div>
+
+        <div class="glass-panel rounded-3xl p-1 overflow-hidden shadow-apple-card border border-slate-200/80">
             <div class="overflow-x-auto">
                 <table class="w-full text-left border-collapse">
                     <thead>
-                        <tr class="border-b border-divider/50">
-                            <th class="py-4 px-6 font-medium text-sm text-muted">ID</th>
-                            <th class="py-4 px-6 font-medium text-sm text-muted">Type</th>
-                            <th class="py-4 px-6 font-medium text-sm text-muted">Status</th>
-                            <th class="py-4 px-6 font-medium text-sm text-muted">Date</th>
-                            <th class="py-4 px-6 font-medium text-sm text-muted text-right">Amount</th>
+                        <tr class="border-b border-divider bg-slate-50/70 text-xs font-semibold text-muted">
+                            <th class="py-3.5 px-5">Ref / Tx ID</th>
+                            <th class="py-3.5 px-4">Client / Description</th>
+                            <th class="py-3.5 px-4">Status</th>
+                            <th class="py-3.5 px-4">Transaction Date</th>
+                            <th class="py-3.5 px-5 text-right">Settled Amount</th>
                         </tr>
                     </thead>
-                    <tbody class="text-sm">
+                    <tbody class="text-xs divide-y divide-slate-100">
                         {% for payment in recent_payments %}
-                        <tr class="border-b border-divider/30 hover:bg-surface/50 transition-colors">
-                            <td class="py-4 px-6 font-mono">{{ payment._id[-6:]|upper }}</td>
-                            <td class="py-4 px-6 font-medium">Payment - {{ payment.description }}</td>
-                            <td class="py-4 px-6">
-                                <span class="px-3 py-1 rounded-full text-xs font-medium bg-green-500/10 text-green-600">{{ payment.status|title }}</span>
+                        <tr class="hover:bg-slate-50/80 transition-colors">
+                            <td class="py-3.5 px-5 font-mono font-bold text-ink">
+                                {{ payment._id[-6:]|upper }}
                             </td>
-                            <td class="py-4 px-6 text-muted">{{ payment.payment_date.strftime('%b %d, %Y') if payment.payment_date else '' }}</td>
-                            <td class="py-4 px-6 text-right font-medium text-ink">
-                                KSh {{ "{:,.2f}".format(payment.amount) if payment.amount else '0.00' }}
+                            <td class="py-3.5 px-4">
+                                <span class="font-semibold text-ink block">{{ payment.client_name }}</span>
+                                <span class="text-[10px] text-muted">{{ payment.description }}</span>
+                            </td>
+                            <td class="py-3.5 px-4">
+                                <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-700 border border-emerald-500/20">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                    {{ payment.status|title }}
+                                </span>
+                            </td>
+                            <td class="py-3.5 px-4 text-muted font-mono text-[11px]">
+                                {{ payment.payment_date.strftime('%d %b %Y') if payment.payment_date else '—' }}
+                            </td>
+                            <td class="py-3.5 px-5 text-right font-mono font-bold text-ink">
+                                KES {{ "{:,.2f}".format(payment.amount) if payment.amount else '0.00' }}
                             </td>
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="5" class="py-8 text-center text-muted">No recent transactions.</td>
+                            <td colspan="5" class="py-12 text-center text-muted">
+                                <svg class="w-10 h-10 text-slate-300 mx-auto mb-2" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                <p class="text-sm font-medium">No recent transactions recorded.</p>
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -110,82 +167,87 @@
         </div>
     </section>
     {% else %}
-    <!-- Worker Dashboard Display -->
-    <div class="glass rounded-3xl p-8 shadow-sm flex flex-col items-center justify-center text-center py-16 mt-8">
-        <div class="w-16 h-16 bg-primary/10 text-primary rounded-full flex items-center justify-center mb-4">
+
+    <!-- Worker Operations Workspace -->
+    <div class="glass-panel rounded-3xl p-8 sm:p-12 shadow-apple-card border border-slate-200/80 flex flex-col items-center justify-center text-center max-w-2xl mx-auto my-4">
+        <div class="w-16 h-16 rounded-3xl bg-primary-50 text-primary flex items-center justify-center mb-5 border border-primary/20 shadow-sm">
             <svg class="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
                 <circle cx="9" cy="7" r="4"></circle>
-                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" d="M16 3.13a4 4 0 0 1 0 7.75"></path>
             </svg>
         </div>
-        <h2 class="text-2xl font-display font-bold text-ink mb-2">Worker Operations Center</h2>
-        <p class="text-muted max-w-lg mb-8">Welcome to your workspace. Use the navigation menu above to manage your clients, draft policies, and file claims.</p>
-        <div class="flex gap-4">
-            <a href="{{ url_for('clients.index') }}" class="magnetic-btn bg-surface border border-divider text-ink px-6 py-2.5 rounded-full font-medium shadow-sm hover:shadow-md transition-shadow">
-                View Clients
+        <h2 class="text-2xl font-display font-bold text-ink tracking-tight">Worker Underwriting Operations</h2>
+        <p class="text-muted text-xs sm:text-sm max-w-md mt-2 mb-8 leading-relaxed">
+            Access your assigned client accounts, record and manage insured vehicles, issue motor underwriting policies, and monitor upcoming renewal timelines.
+        </p>
+        <div class="flex flex-wrap items-center justify-center gap-3 w-full sm:w-auto">
+            <a href="{{ url_for('clients.index') }}" class="apple-btn px-6 py-2.5 rounded-full text-xs font-semibold text-ink bg-surface border border-divider hover:bg-slate-50 shadow-sm transition-all">
+                Client Directory
             </a>
-            <a href="{{ url_for('policies.new') }}" class="magnetic-btn bg-primary text-surface px-6 py-2.5 rounded-full font-medium shadow-sm hover:shadow-md transition-shadow">
-                Draft New Policy
+            <a href="{{ url_for('policies.new') }}" class="apple-btn px-6 py-2.5 rounded-full text-xs font-semibold text-surface bg-primary hover:bg-primary-dark shadow-sm transition-all">
+                + Issue New Policy
             </a>
         </div>
     </div>
     {% endif %}
+
 </div>
 
-<!-- Payments Details Modal -->
-<div id="paymentsDetailsModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-ink/50 backdrop-blur-sm overflow-y-auto py-10">
-    <div class="glass rounded-3xl p-8 max-w-5xl w-full mx-4 shadow-2xl border border-divider/60 my-auto flex flex-col gap-6">
+<!-- Financial Records Details Modal (Apple Sheet Style) -->
+<div id="paymentsDetailsModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-ink/40 backdrop-blur-md overflow-y-auto p-4 py-8">
+    <div class="glass-dropdown rounded-3xl p-6 sm:p-8 max-w-4xl w-full shadow-2xl border border-slate-200/80 my-auto flex flex-col gap-5 transform transition-all animate-in">
         <div class="flex justify-between items-start">
             <div>
-                <h2 id="modalTitle" class="text-3xl font-display font-bold text-ink">Payment Details</h2>
-                <p id="modalSubtitle" class="text-muted mt-1">Listing all matching records</p>
+                <h2 id="modalTitle" class="text-2xl font-display font-bold text-ink">Payment Records</h2>
+                <p id="modalSubtitle" class="text-xs text-muted mt-0.5">Listing matching accounts records</p>
             </div>
-            <button onclick="closePaymentsModal()" class="w-10 h-10 rounded-full border border-divider flex items-center justify-center text-muted hover:text-ink hover:bg-surface transition-all">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path>
-                </svg>
+            <button onclick="closePaymentsModal()" class="w-8 h-8 rounded-full border border-divider flex items-center justify-center text-muted hover:text-ink hover:bg-slate-100 transition-all apple-btn">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path></svg>
             </button>
         </div>
 
-        <!-- Total Counter Summary inside Modal -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div class="bg-surface/50 border border-divider rounded-2xl p-4 flex flex-col justify-center">
-                <p class="text-xs font-semibold text-muted uppercase tracking-wider">Filtered Count</p>
-                <p id="modalCount" class="text-2xl font-bold text-ink mt-1 font-mono">0 payments</p>
+        <!-- Filter Count & Sum Inset -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div class="bg-slate-50/80 border border-slate-200/80 rounded-2xl p-3.5 flex flex-col justify-center">
+                <span class="text-[10px] font-semibold text-muted uppercase tracking-wider">Filtered Volume</span>
+                <span id="modalCount" class="text-lg font-bold text-ink font-mono mt-0.5">0 records</span>
             </div>
-            <div class="bg-surface/50 border border-divider rounded-2xl p-4 flex flex-col justify-center col-span-2">
-                <p class="text-xs font-semibold text-muted uppercase tracking-wider">Sum of Listed Payments</p>
-                <p id="modalSum" class="text-2xl font-bold text-primary mt-1 font-display">KSh 0.00</p>
+            <div class="bg-slate-50/80 border border-slate-200/80 rounded-2xl p-3.5 flex flex-col justify-center sm:col-span-2">
+                <span class="text-[10px] font-semibold text-muted uppercase tracking-wider">Total Aggregated Value</span>
+                <span id="modalSum" class="text-lg font-bold text-primary font-mono mt-0.5">KES 0.00</span>
             </div>
         </div>
 
-        <!-- Search & Filter Controls -->
-        <div class="flex gap-4">
-            <input type="text" id="modalSearch" oninput="filterModalTable()" placeholder="Filter list by client name, policy number, description, vehicle..." class="flex-1 bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary transition-all">
+        <!-- Live Search Input -->
+        <div class="relative">
+            <svg class="w-4 h-4 text-muted absolute left-3.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            <input type="text" id="modalSearch" oninput="filterModalTable()" placeholder="Filter results by client, policy number, vehicle registration..." class="w-full bg-surface border border-divider rounded-xl pl-9 pr-4 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all">
         </div>
 
-        <!-- Detailed Table -->
-        <div class="overflow-x-auto border border-divider/50 rounded-2xl max-h-[380px] overflow-y-auto">
-            <table class="w-full text-left border-collapse">
+        <!-- Dynamic Table View -->
+        <div class="overflow-x-auto border border-slate-200/80 rounded-2xl max-h-[320px] overflow-y-auto">
+            <table class="w-full text-left border-collapse text-xs">
                 <thead>
-                    <tr class="bg-primary/5 border-b border-divider/50 text-sm sticky top-0 bg-background z-10">
-                        <th class="py-3.5 px-4 font-semibold text-ink">Client Details</th>
-                        <th class="py-3.5 px-4 font-semibold text-ink">Policy & Vehicle</th>
-                        <th class="py-3.5 px-4 font-semibold text-ink">Payment Info</th>
-                        <th class="py-3.5 px-4 font-semibold text-ink text-right">Amount</th>
+                    <tr class="bg-slate-50/90 border-b border-divider sticky top-0 z-10 font-semibold text-muted">
+                        <th class="py-3 px-4">Client Details</th>
+                        <th class="py-3 px-4">Policy & Vehicle</th>
+                        <th class="py-3 px-4">Transaction / Due</th>
+                        <th class="py-3 px-4 text-right">Amount (KES)</th>
                     </tr>
                 </thead>
-                <tbody id="modalTableBody" class="text-sm">
-                    <!-- Rows loaded dynamically -->
+                <tbody id="modalTableBody" class="divide-y divide-slate-100">
+                    <!-- Dynamic entries rendered by JavaScript -->
                 </tbody>
             </table>
         </div>
 
-        <!-- Close btn -->
-        <div class="flex justify-end">
-            <button onclick="closePaymentsModal()" class="magnetic-btn bg-ink text-surface px-8 py-2.5 rounded-full font-medium text-sm">Close View</button>
+        <!-- Close Button -->
+        <div class="flex justify-end pt-2 border-t border-divider">
+            <button onclick="closePaymentsModal()" class="apple-btn bg-ink hover:bg-slate-800 text-surface px-6 py-2 rounded-full text-xs font-semibold shadow-sm">
+                Close Panel
+            </button>
         </div>
     </div>
 </div>
@@ -193,15 +255,15 @@
 
 {% block scripts %}
 <script>
-    // Animate stats counting up
+    // Stats Counting Animation
     const counters = document.querySelectorAll('.count-up');
     counters.forEach(counter => {
-        const target = parseInt(counter.innerText);
+        const target = parseInt(counter.innerText, 10);
         counter.innerText = '0';
-        
+
         gsap.to(counter, {
             innerHTML: target,
-            duration: 2,
+            duration: 1.5,
             snap: { innerHTML: 1 },
             ease: "power2.out",
             scrollTrigger: {
@@ -211,17 +273,6 @@
         });
     });
 
-    // Stagger table rows
-    gsap.from("tbody tr", {
-        y: 20,
-        opacity: 0,
-        duration: 0.5,
-        stagger: 0.1,
-        ease: "power2.out",
-        delay: 0.4
-    });
-
-    // Modal details Logic
     let currentModalPayments = [];
 
     function showPaymentsModal(status) {
@@ -229,77 +280,59 @@
         const titleEl = document.getElementById('modalTitle');
         const subtitleEl = document.getElementById('modalSubtitle');
         const tableBody = document.getElementById('modalTableBody');
-        const countEl = document.getElementById('modalCount');
-        const sumEl = document.getElementById('modalSum');
         const searchEl = document.getElementById('modalSearch');
 
-        searchEl.value = ''; // clear search input
+        searchEl.value = '';
 
-        // Update title and visual identity depending on status
         let statusLabel = '';
-        let statusClass = '';
+        let statusClass = 'text-primary';
         if (status === 'receivable') {
-            statusLabel = 'Receivable Payments';
+            statusLabel = 'Receivable Accounts';
             statusClass = 'text-primary';
         } else if (status === 'overdue') {
-            statusLabel = 'Overdue Payments';
-            statusClass = 'text-accent';
+            statusLabel = 'Overdue Accounts';
+            statusClass = 'text-amber-600';
         } else if (status === 'paid') {
-            statusLabel = 'Completed Payments';
-            statusClass = 'text-green-600';
+            statusLabel = 'Completed Collections';
+            statusClass = 'text-emerald-600';
         }
 
         titleEl.innerHTML = statusLabel;
-        titleEl.className = `text-3xl font-display font-bold ${statusClass}`;
-        subtitleEl.innerText = `Viewing all current records marked as "${status}"`;
+        titleEl.className = `text-2xl font-display font-bold ${statusClass}`;
+        subtitleEl.innerText = `Detailed ledger entries for status "${status}"`;
 
-        // Show modal with a backdrop animation trigger
         modal.classList.remove('hidden');
         modal.classList.add('flex');
 
-        // Show Loading state
         tableBody.innerHTML = `
             <tr>
                 <td colspan="4" class="py-12 text-center text-muted">
-                    <div class="flex flex-col items-center gap-3 justify-center">
-                        <svg class="animate-spin w-8 h-8 text-primary" viewBox="0 0 24 24" fill="none">
+                    <div class="flex flex-col items-center gap-2">
+                        <svg class="animate-spin w-6 h-6 text-primary" viewBox="0 0 24 24" fill="none">
                             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
                         </svg>
-                        <span class="font-medium text-sm">Fetching and reconciling data...</span>
+                        <span class="text-xs font-medium">Reconciling ledger data...</span>
                     </div>
                 </td>
             </tr>
         `;
 
-        // Fetch from Flask blueprint API
         fetch(`/api/payments/${status}`)
-            .then(response => {
-                if (!response.ok) throw new Error('Network response error');
-                return response.json();
+            .then(res => {
+                if (!res.ok) throw new Error('API Error');
+                return res.json();
             })
             .then(data => {
                 if (data.success) {
                     currentModalPayments = data.payments;
                     renderModalPayments(currentModalPayments);
                 } else {
-                    tableBody.innerHTML = `
-                        <tr>
-                            <td colspan="4" class="py-8 text-center text-red-500 font-medium">
-                                Error loading payments: ${data.error}
-                            </td>
-                        </tr>
-                    `;
+                    tableBody.innerHTML = `<tr><td colspan="4" class="py-8 text-center text-rose-600 font-medium">${data.error}</td></tr>`;
                 }
             })
-            .catch(err => {
-                tableBody.innerHTML = `
-                    <tr>
-                        <td colspan="4" class="py-8 text-center text-red-500 font-medium">
-                            Failed to fetch financial details. Please verify connections.
-                        </td>
-                    </tr>
-                `;
+            .catch(() => {
+                tableBody.innerHTML = `<tr><td colspan="4" class="py-8 text-center text-rose-600 font-medium">Failed to retrieve financial records.</td></tr>`;
             });
     }
 
@@ -308,16 +341,10 @@
         const countEl = document.getElementById('modalCount');
         const sumEl = document.getElementById('modalSum');
 
-        if (payments.length === 0) {
-            tableBody.innerHTML = `
-                <tr>
-                    <td colspan="4" class="py-12 text-center text-muted italic">
-                        No matching payment records found.
-                    </td>
-                </tr>
-            `;
-            countEl.innerText = '0 payments';
-            sumEl.innerText = 'KSh 0.00';
+        if (!payments || payments.length === 0) {
+            tableBody.innerHTML = `<tr><td colspan="4" class="py-10 text-center text-muted italic">No matching records found.</td></tr>`;
+            countEl.innerText = '0 records';
+            sumEl.innerText = 'KES 0.00';
             return;
         }
 
@@ -325,48 +352,30 @@
         let html = '';
 
         payments.forEach(p => {
-            sum += p.amount;
-            const formattedAmount = new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format(p.amount);
-            
-            // Client details block
-            const clientBlock = `
-                <div class="flex flex-col gap-0.5">
-                    <span class="font-bold text-ink">${p.client_name}</span>
-                    <span class="text-xs font-mono text-muted/90">${p.client_uid}</span>
-                    <span class="text-xs text-muted/75">${p.client_email} | ${p.client_phone}</span>
-                </div>
-            `;
+            sum += p.amount || 0;
+            const formattedAmount = new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format(p.amount || 0);
 
-            // Policy & Vehicle block
-            const policyBlock = `
-                <div class="flex flex-col gap-0.5">
-                    <span class="inline-block bg-primary/10 text-primary px-2.5 py-0.5 rounded-md text-xs font-mono font-bold w-max">${p.policy_number}</span>
-                    <span class="text-xs font-medium text-ink capitalize mt-0.5">${p.policy_type.replace('_', ' ')}</span>
-                    <span class="text-xs text-muted">${p.vehicle_reg} (${p.vehicle_make} ${p.vehicle_model})</span>
-                </div>
-            `;
-
-            // Payment Info block
-            const paymentBlock = `
-                <div class="flex flex-col gap-0.5">
-                    <span class="font-medium text-ink">${p.description}</span>
-                    <span class="text-xs text-muted">Due/Paid: ${p.payment_date_str}</span>
-                </div>
-            `;
-
-            // Row Template
             html += `
-                <tr class="border-b border-divider/30 hover:bg-surface/50 transition-colors">
-                    <td class="py-4 px-4">${clientBlock}</td>
-                    <td class="py-4 px-4">${policyBlock}</td>
-                    <td class="py-4 px-4">${paymentBlock}</td>
-                    <td class="py-4 px-4 text-right font-bold text-ink font-mono">${formattedAmount}</td>
+                <tr class="hover:bg-slate-50 transition-colors">
+                    <td class="py-3 px-4">
+                        <span class="font-bold text-ink block">${p.client_name || '—'}</span>
+                        <span class="text-[10px] text-muted font-mono">${p.client_email || ''} &bull; ${p.client_phone || ''}</span>
+                    </td>
+                    <td class="py-3 px-4">
+                        <span class="inline-block bg-primary-50 text-primary px-2 py-0.5 rounded font-mono font-bold text-[10px]">${p.policy_number || '—'}</span>
+                        <span class="text-[10px] text-muted block mt-0.5">${p.vehicle_reg || 'No vehicle'}</span>
+                    </td>
+                    <td class="py-3 px-4">
+                        <span class="font-medium text-ink block">${p.description || 'Payment'}</span>
+                        <span class="text-[10px] text-muted font-mono">${p.payment_date_str || ''}</span>
+                    </td>
+                    <td class="py-3 px-4 text-right font-mono font-bold text-ink">${formattedAmount}</td>
                 </tr>
             `;
         });
 
         tableBody.innerHTML = html;
-        countEl.innerText = `${payments.length} payment${payments.length !== 1 ? 's' : ''}`;
+        countEl.innerText = `${payments.length} record${payments.length !== 1 ? 's' : ''}`;
         sumEl.innerText = new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format(sum);
     }
 
@@ -378,27 +387,8 @@
         }
 
         const filtered = currentModalPayments.filter(p => {
-            const name = (p.client_name || '').toLowerCase();
-            const email = (p.client_email || '').toLowerCase();
-            const phone = (p.client_phone || '').toLowerCase();
-            const uid = (p.client_uid || '').toLowerCase();
-            const pnum = (p.policy_number || '').toLowerCase();
-            const ptype = (p.policy_type || '').toLowerCase();
-            const reg = (p.vehicle_reg || '').toLowerCase();
-            const make = (p.vehicle_make || '').toLowerCase();
-            const model = (p.vehicle_model || '').toLowerCase();
-            const desc = (p.description || '').toLowerCase();
-
-            return name.includes(query) || 
-                   email.includes(query) || 
-                   phone.includes(query) || 
-                   uid.includes(query) || 
-                   pnum.includes(query) || 
-                   ptype.includes(query) || 
-                   reg.includes(query) || 
-                   make.includes(query) || 
-                   model.includes(query) || 
-                   desc.includes(query);
+            const combined = `${p.client_name || ''} ${p.client_email || ''} ${p.client_phone || ''} ${p.policy_number || ''} ${p.vehicle_reg || ''} ${p.description || ''}`.toLowerCase();
+            return combined.includes(query);
         });
 
         renderModalPayments(filtered);

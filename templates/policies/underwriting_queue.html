@@ -1,0 +1,249 @@
+{% extends 'base.html' %}
+
+{% block title %}Underwriting & Review Queue — Policy Guard{% endblock %}
+
+{% block content %}
+<div class="flex flex-col gap-6 max-w-7xl mx-auto w-full">
+
+    <!-- Page Header & Action Bar -->
+    <header class="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 pb-2 border-b border-divider/60">
+        <div>
+            <div class="flex items-center gap-2 text-xs text-muted font-medium mb-1">
+                <a href="{{ url_for('policies.list') }}" class="hover:text-primary transition-colors">Policies</a>
+                <span>&rsaquo;</span>
+                <span class="text-ink font-semibold">Underwriting Center</span>
+            </div>
+            <h1 class="text-3xl sm:text-4xl font-display font-bold text-ink tracking-tight">Underwriting Review Queue</h1>
+            <p class="text-muted text-xs sm:text-sm mt-1">Centralized review, validation, approval, and issuance pipeline for insurance policies</p>
+        </div>
+
+        <div class="flex items-center gap-3 w-full sm:w-auto">
+            <a href="{{ url_for('policies.create_policy') }}" class="apple-btn flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full text-xs font-semibold text-surface bg-primary hover:bg-primary-dark shadow-sm transition-all">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                <span>New Policy</span>
+            </a>
+        </div>
+    </header>
+
+    <!-- Top KPI Cards Row -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+        <div class="glass-card p-4 rounded-2xl flex flex-col justify-between">
+            <span class="text-xs font-medium text-amber-700 flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span> Pending Review
+            </span>
+            <div class="flex items-baseline gap-2 mt-2">
+                <span class="text-2xl sm:text-3xl font-display font-bold text-amber-700">{{ pending_count }}</span>
+                <span class="text-[11px] text-amber-600/80 font-mono">Needs Action</span>
+            </div>
+        </div>
+        <div class="glass-card p-4 rounded-2xl flex flex-col justify-between">
+            <span class="text-xs font-medium text-blue-700 flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-blue-500"></span> Approved
+            </span>
+            <div class="flex items-baseline gap-2 mt-2">
+                <span class="text-2xl sm:text-3xl font-display font-bold text-blue-700">{{ approved_count }}</span>
+                <span class="text-[11px] text-blue-600/80 font-mono">Ready to Publish</span>
+            </div>
+        </div>
+        <div class="glass-card p-4 rounded-2xl flex flex-col justify-between">
+            <span class="text-xs font-medium text-slate-500 flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-slate-400"></span> Drafts
+            </span>
+            <div class="flex items-baseline gap-2 mt-2">
+                <span class="text-2xl sm:text-3xl font-display font-bold text-slate-700">{{ draft_count }}</span>
+                <span class="text-[11px] text-muted font-mono">In Preparation</span>
+            </div>
+        </div>
+        <div class="glass-card p-4 rounded-2xl flex flex-col justify-between">
+            <span class="text-xs font-medium text-emerald-700 flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-emerald-500"></span> Pipeline Premium
+            </span>
+            <div class="flex items-baseline gap-2 mt-2">
+                <span class="text-xl sm:text-2xl font-display font-bold text-emerald-700">KES {{ "{:,.0f}".format(total_pipeline_premium) }}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search & Filter Toolbar -->
+    <div class="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
+        <!-- Status Filter Tabs -->
+        <div class="flex items-center p-1 rounded-2xl bg-slate-200/60 w-full sm:w-fit border border-slate-300/40 shadow-subtle-inner overflow-x-auto">
+            <a href="{{ url_for('policies.underwriting_queue', underwriter=underwriter_filter) }}" class="flex-1 sm:flex-initial px-4 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all {% if not status_filter %}bg-surface text-primary shadow-sm{% else %}text-muted hover:text-ink{% endif %}">
+                All Queue ({{ total_in_queue }})
+            </a>
+            <a href="{{ url_for('policies.underwriting_queue', status='pending_review', underwriter=underwriter_filter) }}" class="flex-1 sm:flex-initial px-4 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all {% if status_filter == 'pending_review' %}bg-surface text-amber-700 shadow-sm{% else %}text-muted hover:text-ink{% endif %}">
+                Pending Review ({{ pending_count }})
+            </a>
+            <a href="{{ url_for('policies.underwriting_queue', status='approved', underwriter=underwriter_filter) }}" class="flex-1 sm:flex-initial px-4 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all {% if status_filter == 'approved' %}bg-surface text-blue-700 shadow-sm{% else %}text-muted hover:text-ink{% endif %}">
+                Approved ({{ approved_count }})
+            </a>
+            <a href="{{ url_for('policies.underwriting_queue', status='draft', underwriter=underwriter_filter) }}" class="flex-1 sm:flex-initial px-4 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all {% if status_filter == 'draft' %}bg-surface text-slate-700 shadow-sm{% else %}text-muted hover:text-ink{% endif %}">
+                Drafts ({{ draft_count }})
+            </a>
+        </div>
+
+        <!-- Underwriter Selector -->
+        <form method="GET" class="flex items-center gap-2 w-full sm:w-auto">
+            {% if status_filter %}
+            <input type="hidden" name="status" value="{{ status_filter }}">
+            {% endif %}
+            <select name="underwriter" onchange="this.form.submit()" class="bg-surface border border-divider rounded-full px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+                <option value="">All Underwriters</option>
+                {% for comp in insurance_companies %}
+                <option value="{{ comp.short_name }}" {% if underwriter_filter == comp.short_name %}selected{% endif %}>{{ comp.name }}</option>
+                {% endfor %}
+            </select>
+        </form>
+    </div>
+
+    <!-- Desktop Data Table View -->
+    <div class="hidden md:block glass-card rounded-3xl overflow-hidden shadow-glass border border-slate-200/80">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="border-b border-divider/60 bg-slate-50/50 text-[11px] font-semibold text-muted uppercase tracking-wider">
+                        <th class="py-3.5 px-4">Policy #</th>
+                        <th class="py-3.5 px-4">Customer & Vehicle</th>
+                        <th class="py-3.5 px-4">Underwriter</th>
+                        <th class="py-3.5 px-4 text-right">Premium (KES)</th>
+                        <th class="py-3.5 px-4 text-center">Status</th>
+                        <th class="py-3.5 px-4">Agent / Servicer</th>
+                        <th class="py-3.5 px-4 text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-divider/40 text-xs">
+                    {% for pol in policies %}
+                    <tr class="hover:bg-slate-50/80 transition-colors group">
+                        <td class="py-3.5 px-4 font-mono font-semibold text-ink">
+                            <a href="{{ url_for('policies.detail', policy_id=pol._id) }}" class="text-primary hover:underline">
+                                {{ pol.policy_number or 'Unnumbered' }}
+                            </a>
+                            <div class="text-[10px] text-muted font-normal mt-0.5 capitalize">{{ pol.policy_type or 'Comprehensive' }}</div>
+                        </td>
+                        <td class="py-3.5 px-4">
+                            <div class="font-semibold text-ink">{{ pol.client_name }}</div>
+                            <div class="text-[11px] text-muted font-mono mt-0.5">
+                                {{ pol.vehicle_reg }} {% if pol.vehicle_make %}&bull; {{ pol.vehicle_make }} {{ pol.vehicle_model }}{% endif %}
+                            </div>
+                        </td>
+                        <td class="py-3.5 px-4">
+                            <span class="font-medium text-slate-700">{{ pol.insurance_company or 'Direct Underwriter' }}</span>
+                        </td>
+                        <td class="py-3.5 px-4 text-right font-mono font-bold text-ink">
+                            {{ "{:,.2f}".format(pol.premium_amount|float) if pol.premium_amount else '0.00' }}
+                        </td>
+                        <td class="py-3.5 px-4 text-center">
+                            {% if pol.status == 'pending_review' %}
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200/60">
+                                <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Pending Review
+                            </span>
+                            {% elif pol.status == 'approved' %}
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-200/60">
+                                <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span> Approved
+                            </span>
+                            {% elif pol.status == 'draft' %}
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold text-slate-600 bg-slate-100 border border-slate-200/80">
+                                <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span> Draft
+                            </span>
+                            {% else %}
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold text-slate-600 bg-slate-100">
+                                {{ pol.status }}
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="py-3.5 px-4 text-muted">
+                            {{ pol.worker_name }}
+                        </td>
+                        <td class="py-3.5 px-4 text-right">
+                            <div class="inline-flex items-center gap-1.5">
+                                {% if current_user.role == 'admin' %}
+                                    {% if pol.status == 'pending_review' %}
+                                    <form action="{{ url_for('policies.approve', policy_id=pol._id) }}" method="POST" class="inline">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200/60 transition-all">
+                                            Approve
+                                        </button>
+                                    </form>
+                                    <form action="{{ url_for('policies.reject', policy_id=pol._id) }}" method="POST" class="inline">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="px-3 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200/60 transition-all">
+                                            Reject
+                                        </button>
+                                    </form>
+                                    {% elif pol.status == 'approved' %}
+                                    <form action="{{ url_for('policies.publish', policy_id=pol._id) }}" method="POST" class="inline">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <input type="hidden" name="change_summary" value="Published from underwriting queue">
+                                        <button type="submit" class="px-3 py-1 rounded-full text-xs font-semibold bg-primary text-surface hover:bg-primary-dark shadow-sm transition-all">
+                                            Publish Policy
+                                        </button>
+                                    </form>
+                                    {% endif %}
+                                {% endif %}
+                                <a href="{{ url_for('policies.detail', policy_id=pol._id) }}" class="px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200/80 transition-all">
+                                    View
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="py-12 text-center text-muted">
+                            <p class="font-medium">No policies in this queue view.</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Mobile View (< 768px) -->
+    <div class="md:hidden flex flex-col gap-3">
+        {% for pol in policies %}
+        <div class="glass-card p-4 rounded-2xl flex flex-col gap-3">
+            <div class="flex items-start justify-between">
+                <div>
+                    <h3 class="font-bold text-sm text-ink">{{ pol.policy_number or 'Unnumbered' }}</h3>
+                    <div class="text-xs text-muted">{{ pol.client_name }} &bull; {{ pol.vehicle_reg }}</div>
+                </div>
+                <div>
+                    {% if pol.status == 'pending_review' %}
+                    <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200/60">Pending</span>
+                    {% elif pol.status == 'approved' %}
+                    <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold text-blue-700 bg-blue-50 border border-blue-200/60">Approved</span>
+                    {% elif pol.status == 'draft' %}
+                    <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold text-slate-600 bg-slate-100">Draft</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="flex items-center justify-between text-xs pt-2 border-t border-divider/40">
+                <span class="text-muted">{{ pol.insurance_company or 'Underwriter' }}</span>
+                <span class="font-mono font-bold text-ink">KES {{ "{:,.2f}".format(pol.premium_amount|float) if pol.premium_amount else '0.00' }}</span>
+            </div>
+
+            <div class="flex items-center justify-end gap-2 pt-2 border-t border-divider/40">
+                {% if current_user.role == 'admin' and pol.status == 'pending_review' %}
+                <form action="{{ url_for('policies.approve', policy_id=pol._id) }}" method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60">Approve</button>
+                </form>
+                {% elif current_user.role == 'admin' and pol.status == 'approved' %}
+                <form action="{{ url_for('policies.publish', policy_id=pol._id) }}" method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="px-3 py-1 rounded-full text-xs font-semibold bg-primary text-surface">Publish</button>
+                </form>
+                {% endif %}
+                <a href="{{ url_for('policies.detail', policy_id=pol._id) }}" class="px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">Detail</a>
+            </div>
+        </div>
+        {% else %}
+        <div class="glass-card p-8 rounded-2xl text-center text-muted">
+            <p>No policies in this queue view.</p>
+        </div>
+        {% endfor %}
+    </div>
+
+</div>
+{% endblock %}

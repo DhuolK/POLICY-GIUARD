@@ -17,8 +17,13 @@ venv/
 .claude/
 .opencode/
 .freebuff/
+.audit/
+.vscode/
 _bmad/
 _bmad-output/
+
+# Large demo media — not source (16.7 MB screen recording bloats git history)
+POLICYAPP/
 
 # Generated design bundles and archives
 build-premium-website/

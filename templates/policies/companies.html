@@ -1,0 +1,440 @@
+{% extends 'base.html' %}
+
+{% block title %}Insurance Underwriters Directory — Policy Guard{% endblock %}
+
+{% block content %}
+<div class="flex flex-col gap-6 max-w-7xl mx-auto w-full">
+
+    <!-- Page Header & Action Bar -->
+    <header class="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 pb-2 border-b border-divider/60">
+        <div>
+            <div class="flex items-center gap-2 text-xs text-muted font-medium mb-1">
+                <a href="{{ url_for('policies.list') }}" class="hover:text-primary transition-colors">Policies</a>
+                <span>&rsaquo;</span>
+                <span class="text-ink font-semibold">Insurance Underwriters</span>
+            </div>
+            <h1 class="text-3xl sm:text-4xl font-display font-bold text-ink tracking-tight">Licensed Underwriters</h1>
+            <p class="text-muted text-xs sm:text-sm mt-1">Directory of licensed Kenyan insurance companies, underwriters, and linked insured vehicles</p>
+        </div>
+
+        {% if current_user.role == 'admin' %}
+        <div class="flex items-center gap-3 w-full sm:w-auto">
+            <button onclick="openModal('addCompanyModal')" class="apple-btn flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full text-xs font-semibold text-surface bg-primary hover:bg-primary-dark shadow-sm transition-all">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                <span>Add Insurance Provider</span>
+            </button>
+        </div>
+        {% endif %}
+    </header>
+
+    <!-- Top KPI Cards Row -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+        <div class="glass-card p-4 rounded-2xl flex flex-col justify-between">
+            <span class="text-xs font-medium text-muted">Total Underwriters</span>
+            <div class="flex items-baseline gap-2 mt-2">
+                <span class="text-2xl sm:text-3xl font-display font-bold text-ink">{{ companies|length }}</span>
+                <span class="text-[11px] text-muted font-mono">IRA Registered</span>
+            </div>
+        </div>
+        <div class="glass-card p-4 rounded-2xl flex flex-col justify-between">
+            <span class="text-xs font-medium text-emerald-700 flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-emerald-500"></span> Active Providers
+            </span>
+            <div class="flex items-baseline gap-2 mt-2">
+                <span class="text-2xl sm:text-3xl font-display font-bold text-emerald-700">{{ active_count }}</span>
+                <span class="text-[11px] text-emerald-600/80 font-mono">Issuing</span>
+            </div>
+        </div>
+        <div class="glass-card p-4 rounded-2xl flex flex-col justify-between">
+            <span class="text-xs font-medium text-slate-500 flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-slate-400"></span> Inactive / Archived
+            </span>
+            <div class="flex items-baseline gap-2 mt-2">
+                <span class="text-2xl sm:text-3xl font-display font-bold text-slate-600">{{ inactive_count }}</span>
+                <span class="text-[11px] text-muted font-mono">Disabled</span>
+            </div>
+        </div>
+        <div class="glass-card p-4 rounded-2xl flex flex-col justify-between">
+            <span class="text-xs font-medium text-primary flex items-center gap-1.5">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"></path><circle cx="7" cy="17" r="2"></circle><circle cx="17" cy="17" r="2"></circle></svg>
+                Linked Vehicles
+            </span>
+            <div class="flex items-baseline gap-2 mt-2">
+                <span class="text-2xl sm:text-3xl font-display font-bold text-primary">{{ total_vehicles }}</span>
+                <span class="text-[11px] text-muted font-mono">Covered</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search & Filter Toolbar -->
+    <div class="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
+        <!-- Segmented Filter for Active/All/Inactive -->
+        <div class="flex items-center p-1 rounded-2xl bg-slate-200/60 w-full sm:w-fit border border-slate-300/40 shadow-subtle-inner">
+            <a href="{{ url_for('policies.companies', search=search_query) }}" class="flex-1 sm:flex-initial px-4 py-1.5 rounded-xl text-xs font-semibold transition-all {% if not status_filter %}bg-surface text-primary shadow-sm{% else %}text-muted hover:text-ink{% endif %}">
+                All ({{ companies|length }})
+            </a>
+            <a href="{{ url_for('policies.companies', status='active', search=search_query) }}" class="flex-1 sm:flex-initial px-4 py-1.5 rounded-xl text-xs font-semibold transition-all {% if status_filter == 'active' %}bg-surface text-emerald-700 shadow-sm{% else %}text-muted hover:text-ink{% endif %}">
+                Active
+            </a>
+            <a href="{{ url_for('policies.companies', status='inactive', search=search_query) }}" class="flex-1 sm:flex-initial px-4 py-1.5 rounded-xl text-xs font-semibold transition-all {% if status_filter == 'inactive' %}bg-surface text-slate-700 shadow-sm{% else %}text-muted hover:text-ink{% endif %}">
+                Inactive
+            </a>
+        </div>
+
+        <!-- Search Bar -->
+        <form method="GET" class="relative w-full sm:w-80">
+            {% if status_filter %}
+            <input type="hidden" name="status" value="{{ status_filter }}">
+            {% endif %}
+            <svg class="w-4 h-4 text-muted absolute left-3.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input type="text" name="search" value="{{ search_query or '' }}" placeholder="Search company, code, short name..." class="w-full bg-surface border border-divider rounded-full pl-9 pr-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all">
+        </form>
+    </div>
+
+    <!-- Desktop Data Table View -->
+    <div class="hidden md:block glass-card rounded-3xl overflow-hidden shadow-glass border border-slate-200/80">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="border-b border-divider/60 bg-slate-50/50 text-[11px] font-semibold text-muted uppercase tracking-wider">
+                        <th class="py-3.5 px-4 w-12 text-center">#</th>
+                        <th class="py-3.5 px-4">Underwriter / Company Name</th>
+                        <th class="py-3.5 px-4">Short Code</th>
+                        <th class="py-3.5 px-4 text-center">Commission</th>
+                        <th class="py-3.5 px-4 text-center">Insured Vehicles</th>
+                        <th class="py-3.5 px-4 text-center">Issued Policies</th>
+                        <th class="py-3.5 px-4 text-center">Status</th>
+                        {% if current_user.role == 'admin' %}
+                        <th class="py-3.5 px-4 text-right">Action</th>
+                        {% endif %}
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-divider/40 text-xs">
+                    {% for comp in companies %}
+                    <tr class="hover:bg-slate-50/80 transition-colors group">
+                        <td class="py-3.5 px-4 text-center font-mono text-muted">{{ loop.index }}</td>
+                        <td class="py-3.5 px-4">
+                            <div class="font-semibold text-ink group-hover:text-primary transition-colors flex items-center gap-2">
+                                <span class="w-7 h-7 rounded-lg bg-primary-50 text-primary font-bold text-xs flex items-center justify-center border border-primary-100 flex-shrink-0">
+                                    {{ comp.short_name[:2]|upper }}
+                                </span>
+                                <div>
+                                    <span>{{ comp.name }}</span>
+                                    {% if comp.email or comp.phone %}
+                                    <div class="text-[11px] text-muted font-normal mt-0.5 flex items-center gap-2">
+                                        {% if comp.phone %}<span>{{ comp.phone }}</span>{% endif %}
+                                        {% if comp.email %}<span>&bull; {{ comp.email }}</span>{% endif %}
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </td>
+                        <td class="py-3.5 px-4 font-mono font-medium text-slate-600">
+                            <span class="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200/80 text-[11px]">
+                                {{ comp.code or comp.short_name }}
+                            </span>
+                        </td>
+                        <td class="py-3.5 px-4 text-center font-mono font-semibold text-emerald-700">
+                            <span class="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/60 text-[11px]">
+                                {{ comp.commission_rate or 10.0 }}%
+                            </span>
+                        </td>
+                        <td class="py-3.5 px-4 text-center font-mono font-semibold text-ink">
+                            <span class="px-2.5 py-1 rounded-full bg-blue-50 text-primary border border-blue-100">
+                                {{ comp.vehicle_count }} vehicles
+                            </span>
+                        </td>
+                        <td class="py-3.5 px-4 text-center font-mono text-muted">
+                            {{ comp.policy_count }}
+                        </td>
+                        <td class="py-3.5 px-4 text-center">
+                            {% if comp.is_active %}
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200/60">
+                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Active
+                            </span>
+                            {% else %}
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold text-slate-600 bg-slate-100 border border-slate-200/80">
+                                <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span> Inactive
+                            </span>
+                            {% endif %}
+                        </td>
+                        {% if current_user.role == 'admin' %}
+                        <td class="py-3.5 px-4 text-right">
+                            <div class="inline-flex items-center gap-2">
+                                <button type="button" onclick="openEditCompanyModal('{{ comp._id }}', '{{ comp.name|escape }}', '{{ comp.short_name|escape }}', '{{ comp.code|escape }}', '{{ comp.phone or '' }}', '{{ comp.email or '' }}', '{{ comp.commission_rate or 10.0 }}', '{{ comp.contact_person or '' }}', {{ 'true' if comp.is_active else 'false' }})" class="text-xs text-primary hover:text-primary-dark font-semibold px-2.5 py-1 rounded-full bg-primary-50 hover:bg-primary-100/80 border border-primary-200/60 transition-all">
+                                    Edit
+                                </button>
+                                <form action="{{ url_for('policies.toggle_company', company_id=comp._id) }}" method="POST" class="inline">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    {% if comp.is_active %}
+                                    <button type="submit" class="text-xs text-amber-600 hover:text-amber-700 font-semibold px-2.5 py-1 rounded-full bg-amber-50 hover:bg-amber-100/80 border border-amber-200/60 transition-all">
+                                        Deactivate
+                                    </button>
+                                    {% else %}
+                                    <button type="submit" class="text-xs text-emerald-600 hover:text-emerald-700 font-semibold px-2.5 py-1 rounded-full bg-emerald-50 hover:bg-emerald-100/80 border border-emerald-200/60 transition-all">
+                                        Activate
+                                    </button>
+                                    {% endif %}
+                                </form>
+                            </div>
+                        </td>
+                        {% endif %}
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="py-12 text-center text-muted">
+                            <p class="font-medium">No insurance companies match the search criteria.</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Mobile Stacked Card View (< 768px) -->
+    <div class="md:hidden flex flex-col gap-3">
+        {% for comp in companies %}
+        <div class="glass-card p-4 rounded-2xl flex flex-col gap-3">
+            <div class="flex items-start justify-between gap-2">
+                <div class="flex items-center gap-2.5">
+                    <span class="w-9 h-9 rounded-xl bg-primary-50 text-primary font-bold text-xs flex items-center justify-center border border-primary-100 flex-shrink-0">
+                        {{ comp.short_name[:2]|upper }}
+                    </span>
+                    <div>
+                        <h3 class="font-bold text-sm text-ink leading-tight">{{ comp.name }}</h3>
+                        <span class="font-mono text-[11px] text-muted">{{ comp.code or comp.short_name }}</span>
+                    </div>
+                </div>
+                <div>
+                    {% if comp.is_active %}
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200/60">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Active
+                    </span>
+                    {% else %}
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold text-slate-600 bg-slate-100 border border-slate-200/80">
+                        <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span> Inactive
+                    </span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 pt-2 border-t border-divider/40 text-xs">
+                <div>
+                    <span class="text-muted block text-[10px] uppercase font-semibold">Insured Vehicles</span>
+                    <span class="font-mono font-bold text-primary">{{ comp.vehicle_count }}</span>
+                </div>
+                <div>
+                    <span class="text-muted block text-[10px] uppercase font-semibold">Issued Policies</span>
+                    <span class="font-mono font-bold text-ink">{{ comp.policy_count }}</span>
+                </div>
+            </div>
+
+            {% if current_user.role == 'admin' %}
+            <div class="pt-2 border-t border-divider/40 flex justify-end">
+                <form action="{{ url_for('policies.toggle_company', company_id=comp._id) }}" method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    {% if comp.is_active %}
+                    <button type="submit" class="text-xs text-amber-600 font-semibold px-3 py-1 rounded-full bg-amber-50 border border-amber-200/60">
+                        Deactivate Underwriter
+                    </button>
+                    {% else %}
+                    <button type="submit" class="text-xs text-emerald-600 font-semibold px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200/60">
+                        Activate Underwriter
+                    </button>
+                    {% endif %}
+                </form>
+            </div>
+            {% endif %}
+        </div>
+        {% else %}
+        <div class="glass-card p-8 rounded-2xl text-center text-muted">
+            <p>No insurance companies found.</p>
+        </div>
+        {% endfor %}
+    </div>
+
+</div>
+
+<!-- Modal: Add New Insurance Company (Admin Only) -->
+{% if current_user.role == 'admin' %}
+<div id="addCompanyModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/40 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity duration-200">
+    <div class="glass-dropdown bg-surface rounded-3xl p-6 max-w-lg w-full shadow-glass-xl border border-slate-200/80 transform scale-95 transition-transform duration-200">
+        <div class="flex justify-between items-center pb-3 border-b border-divider/60">
+            <div>
+                <h3 class="text-lg font-bold text-ink">Add Insurance Provider</h3>
+                <p class="text-xs text-muted">Register a new licensed insurance underwriter</p>
+            </div>
+            <button onclick="closeModal('addCompanyModal')" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-muted hover:text-ink transition-colors">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+
+        <form action="{{ url_for('policies.add_company') }}" method="POST" class="flex flex-col gap-4 mt-4">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div>
+                <label class="block text-xs font-semibold text-ink mb-1">Company Full Legal Name *</label>
+                <input type="text" name="name" required placeholder="e.g. Jubilee Allianz General Insurance Limited" class="w-full bg-slate-50 border border-divider rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-xs font-semibold text-ink mb-1">Short Name / Brand</label>
+                    <input type="text" name="short_name" placeholder="e.g. Jubilee Allianz" class="w-full bg-slate-50 border border-divider rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-ink mb-1">Short Code</label>
+                    <input type="text" name="code" placeholder="e.g. JUB" class="w-full bg-slate-50 border border-divider rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary uppercase">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-xs font-semibold text-ink mb-1">Commission Rate (%)</label>
+                    <input type="number" step="0.1" min="0" max="100" name="commission_rate" value="10.0" placeholder="10.0" class="w-full bg-slate-50 border border-divider rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-ink mb-1">Contact Person</label>
+                    <input type="text" name="contact_person" placeholder="e.g. Underwriting Manager" class="w-full bg-slate-50 border border-divider rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-xs font-semibold text-ink mb-1">Phone Number</label>
+                    <input type="text" name="phone" placeholder="e.g. +254 20 3281000" class="w-full bg-slate-50 border border-divider rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-ink mb-1">Official Email</label>
+                    <input type="email" name="email" placeholder="e.g. info@underwriter.co.ke" class="w-full bg-slate-50 border border-divider rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-2.5 pt-3 border-t border-divider/60 mt-2">
+                <button type="button" onclick="closeModal('addCompanyModal')" class="px-4 py-2 rounded-full text-xs font-semibold text-muted hover:text-ink hover:bg-slate-100 transition-all">
+                    Cancel
+                </button>
+                <button type="submit" class="px-5 py-2 rounded-full text-xs font-semibold text-surface bg-primary hover:bg-primary-dark shadow-sm transition-all">
+                    Register Provider
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: Edit Insurance Company (Admin Only) -->
+<div id="editCompanyModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/40 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity duration-200">
+    <div class="glass-dropdown bg-surface rounded-3xl p-6 max-w-lg w-full shadow-glass-xl border border-slate-200/80 transform scale-95 transition-transform duration-200">
+        <div class="flex justify-between items-center pb-3 border-b border-divider/60">
+            <div>
+                <h3 class="text-lg font-bold text-ink">Edit Insurance Underwriter</h3>
+                <p class="text-xs text-muted">Update underwriter information, rates, and contact details</p>
+            </div>
+            <button onclick="closeModal('editCompanyModal')" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-muted hover:text-ink transition-colors">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+
+        <form id="editCompanyForm" action="" method="POST" class="flex flex-col gap-4 mt-4">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div>
+                <label class="block text-xs font-semibold text-ink mb-1">Company Full Legal Name *</label>
+                <input type="text" id="edit_name" name="name" required class="w-full bg-slate-50 border border-divider rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-xs font-semibold text-ink mb-1">Short Name / Brand</label>
+                    <input type="text" id="edit_short_name" name="short_name" class="w-full bg-slate-50 border border-divider rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-ink mb-1">Short Code</label>
+                    <input type="text" id="edit_code" name="code" class="w-full bg-slate-50 border border-divider rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary uppercase">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-xs font-semibold text-ink mb-1">Commission Rate (%)</label>
+                    <input type="number" step="0.1" min="0" max="100" id="edit_commission_rate" name="commission_rate" class="w-full bg-slate-50 border border-divider rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-ink mb-1">Contact Person</label>
+                    <input type="text" id="edit_contact_person" name="contact_person" class="w-full bg-slate-50 border border-divider rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-xs font-semibold text-ink mb-1">Phone Number</label>
+                    <input type="text" id="edit_phone" name="phone" class="w-full bg-slate-50 border border-divider rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-ink mb-1">Official Email</label>
+                    <input type="email" id="edit_email" name="email" class="w-full bg-slate-50 border border-divider rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2 pt-1">
+                <input type="checkbox" id="edit_is_active" name="is_active" value="1" class="rounded border-divider text-primary focus:ring-primary">
+                <label for="edit_is_active" class="text-xs font-medium text-ink">Active (Available for new policy issuance)</label>
+            </div>
+
+            <div class="flex items-center justify-end gap-2.5 pt-3 border-t border-divider/60 mt-2">
+                <button type="button" onclick="closeModal('editCompanyModal')" class="px-4 py-2 rounded-full text-xs font-semibold text-muted hover:text-ink hover:bg-slate-100 transition-all">
+                    Cancel
+                </button>
+                <button type="submit" class="px-5 py-2 rounded-full text-xs font-semibold text-surface bg-primary hover:bg-primary-dark shadow-sm transition-all">
+                    Save Changes
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function openEditCompanyModal(id, name, shortName, code, phone, email, commissionRate, contactPerson, isActive) {
+    const form = document.getElementById('editCompanyForm');
+    form.action = `/policies/companies/${id}/edit`;
+    document.getElementById('edit_name').value = name;
+    document.getElementById('edit_short_name').value = shortName;
+    document.getElementById('edit_code').value = code;
+    document.getElementById('edit_phone').value = phone;
+    document.getElementById('edit_email').value = email;
+    document.getElementById('edit_commission_rate').value = commissionRate;
+    document.getElementById('edit_contact_person').value = contactPerson;
+    document.getElementById('edit_is_active').checked = Boolean(isActive);
+    openModal('editCompanyModal');
+}
+
+function openModal(id) {
+    const modal = document.getElementById(id);
+    if (!modal) return;
+    modal.classList.remove('opacity-0', 'pointer-events-none');
+    modal.classList.add('opacity-100', 'pointer-events-auto');
+    const inner = modal.querySelector('.glass-dropdown');
+    if (inner) {
+        inner.classList.remove('scale-95');
+        inner.classList.add('scale-100');
+    }
+}
+
+function closeModal(id) {
+    const modal = document.getElementById(id);
+    if (!modal) return;
+    modal.classList.remove('opacity-100', 'pointer-events-auto');
+    modal.classList.add('opacity-0', 'pointer-events-none');
+    const inner = modal.querySelector('.glass-dropdown');
+    if (inner) {
+        inner.classList.remove('scale-100');
+        inner.classList.add('scale-95');
+    }
+}
+</script>
+{% endif %}
+
+{% endblock %}

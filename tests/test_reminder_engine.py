@@ -45,9 +45,20 @@ class Harness(unittest.TestCase):
     def _seed(cls):
         d = cls.db
         for coll in ('users', 'policies', 'reminders', 'notifications',
-                     'app_settings'):
+                     'app_settings', 'sms_outbox', 'sms_suppressions',
+                     'sms_templates'):
             d[coll].delete_many({})
         d.app_settings.drop()  # force defaults
+        # Deterministic engine gates: no quiet-hour defers, generous cap.
+        d.app_settings.insert_one({
+            'key': 'sms_engine',
+            'quiet_hours': {'enabled': False, 'start': '21:00', 'end': '07:00'},
+            'max_sms_per_customer_per_day': 10,
+            'sms_cost_per_segment_kes': 1.0,
+            'max_attempts': 5,
+            'retry_base_delay_seconds': 60,
+            'drain_batch_size': 100,
+        })
 
         cls.admin_id = d.users.insert_one(
             {'role': 'admin', 'email': 'a@a.co'}).inserted_id
@@ -104,7 +115,8 @@ class TestReminderEngine(Harness):
         before_jobs = self.db.reminders.count_documents({})
         before_notifs = self.db.notifications.count_documents({})
         stats = ReminderService.run_due_reminders(user_id=self.admin_id)
-        self.assertEqual(stats, {'staff_sent': 0, 'sms_sent': 0, 'sms_failed': 0})
+        self.assertEqual(stats, {'staff_sent': 0, 'sms_sent': 0, 'sms_failed': 0,
+                                 'sms_suppressed': 0, 'sms_retrying': 0})
         self.assertEqual(self.db.reminders.count_documents({}), before_jobs)
         self.assertEqual(self.db.notifications.count_documents({}), before_notifs)
 

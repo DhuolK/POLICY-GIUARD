@@ -1,5 +1,6 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, abort
 from flask_login import login_required, current_user
+from app.utils.redirects import safe_redirect
 from bson import ObjectId
 import datetime
 from app.extensions import get_db
@@ -63,15 +64,49 @@ def _load_client(client_id, message="Unauthorized access to this client"):
 @role_required('admin', 'worker')
 def list_policies():
     search_query = request.args.get('search')
-    policies = PolicyService.get_policies(search_query, user=current_user)
+    sort = request.args.get('sort')
+    category = request.args.get('category', 'all')
+    try:
+        page = int(request.args.get('page', 1))
+    except ValueError:
+        page = 1
+    try:
+        per_page = int(request.args.get('per_page', 25))
+    except ValueError:
+        per_page = 25
+    # Limit per_page to sensible values
+    if per_page not in [10, 25, 50, 100]:
+        per_page = 25
+
+    policies_page = PolicyService.get_policies(
+        search_query=search_query,
+        user=current_user,
+        sort=sort,
+        category=category,
+        page=page,
+        per_page=per_page
+    )
     # Counts must use the same scope as the list, or a worker sees "11 policies"
     # above a table of 0 rows.
     status_counts = PolicyService.get_status_counts(user=current_user)
 
     from app.services.policy_type_service import PolicyTypeService
+    from app.services.insurance_company_service import InsuranceCompanyService
     policy_types = PolicyTypeService.get_policy_types()
+    insurance_companies = InsuranceCompanyService.get_active_companies()
 
-    return render_template('policies/list.html', policies=policies, status_counts=status_counts, search_query=search_query, policy_types=policy_types)
+    return render_template(
+        'policies/list.html',
+        policies_page=policies_page,
+        status_counts=status_counts,
+        search_query=search_query,
+        policy_types=policy_types,
+        insurance_companies=insurance_companies,
+        category=category,
+        sort=sort,
+        page=page,
+        per_page=per_page
+    )
 
 
 @policies_bp.route('/new', methods=['GET', 'POST'])
@@ -79,6 +114,7 @@ def list_policies():
 @role_required('admin', 'worker')
 def new():
     db = get_db()
+    from app.services.insurance_company_service import InsuranceCompanyService
 
     if request.method == 'POST':
         client_id = request.form.get('client_id')
@@ -88,6 +124,11 @@ def new():
         reg_number = request.form.get('reg_number', '').strip().upper()
         policy_type = request.form.get('policy_type')
         premium_str = request.form.get('premium', '').strip()
+
+        category = request.form.get('category', 'motor').strip()
+        pax_str = request.form.get('pax', '').strip()
+        insurance_company_id = request.form.get('insurance_company_id')
+        certificate_number = request.form.get('certificate_number', '').strip()
 
         policy_number = request.form.get('policy_number', '').strip().upper()
         suggested_number = request.form.get('suggested_policy_number', '').strip().upper()
@@ -107,14 +148,22 @@ def new():
 
         if not reg_number or not policy_type or not premium_str:
             flash("All policy and vehicle registration fields are required.", "error")
-            return redirect(request.referrer or url_for('clients.index'))
+            return safe_redirect(url_for('clients.index'))
 
         try:
             year = int(year_str) if year_str else None
             premium = float(premium_str)
+            pax = int(pax_str) if pax_str else 4
         except (ValueError, TypeError):
-            flash("Invalid year or premium amount provided.", "error")
-            return redirect(request.referrer or url_for('clients.index'))
+            flash("Invalid year, PAX, or premium amount provided.", "error")
+            return safe_redirect(url_for('clients.index'))
+
+        # Resolve Underwriter name
+        insurance_company_name = None
+        if insurance_company_id and ObjectId.is_valid(insurance_company_id):
+            comp = db.insurance_companies.find_one({"_id": ObjectId(insurance_company_id)})
+            if comp:
+                insurance_company_name = comp.get('short_name') or comp.get('name')
 
         # Parse and validate dates
         if not effective_date:
@@ -127,10 +176,10 @@ def new():
             exp_dt = datetime.datetime.strptime(expiry_date, '%Y-%m-%d')
             if eff_dt >= exp_dt:
                 flash("Effective date must be before expiry date.", "error")
-                return redirect(request.referrer or url_for('clients.index'))
+                return safe_redirect(url_for('clients.index'))
         except ValueError:
             flash("Invalid date format. Expected YYYY-MM-DD.", "error")
-            return redirect(request.referrer or url_for('clients.index'))
+            return safe_redirect(url_for('clients.index'))
 
         # A policy inherits the client's responsible worker, so it stays visible
         # to whoever owns the client — including when an admin records it on
@@ -187,6 +236,11 @@ def new():
                 client_id=client_id,
                 vehicle_id=veh_id,
                 policy_type=policy_type,
+                category=category,
+                pax=pax,
+                insurance_company=insurance_company_name,
+                insurance_company_id=insurance_company_id,
+                certificate_number=certificate_number,
                 status="draft",
                 premium_amount=premium,
                 effective_date=effective_date,
@@ -213,7 +267,7 @@ def new():
         result_data, err_msg = run_transaction(tx_callback)
         if err_msg:
             flash(err_msg, "error")
-            return redirect(request.referrer or url_for('clients.index'))
+            return safe_redirect(url_for('clients.index'))
 
         pol_number, client_name = result_data
         flash(f"Policy {pol_number} successfully recorded for {client_name}!", "success")
@@ -267,6 +321,7 @@ def new():
 
     from app.services.policy_type_service import PolicyTypeService
     policy_types = PolicyTypeService.get_policy_types()
+    insurance_companies = InsuranceCompanyService.get_active_companies()
 
     return render_template(
         'policies/form.html',
@@ -281,7 +336,8 @@ def new():
         default_policy_number=default_policy_number,
         default_effective_date=default_effective_date,
         default_expiry_date=default_expiry_date,
-        policy_types=policy_types
+        policy_types=policy_types,
+        insurance_companies=insurance_companies
     )
 
 
@@ -293,6 +349,19 @@ def expiring():
     return render_template('policies/expiring.html', policies=policies)
 
 
+@policies_bp.route('/expiring/trigger-auto', methods=['POST'])
+@login_required
+@role_required('admin', 'worker')
+def trigger_auto_reminders():
+    stats = ReminderService.run_due_reminders(user_id=str(current_user.id), user=current_user)
+    extras = []
+    if stats.get('sms_suppressed'):
+        extras.append(f"{stats['sms_suppressed']} suppressed (STOP/quiet/cap)")
+    if stats.get('sms_retrying'):
+        extras.append(f"{stats['sms_retrying']} retrying")
+    extra_bit = f" ({'; '.join(extras)})" if extras else ""
+    flash(f"Automated reminders dispatched: {stats.get('staff_sent', 0)} staff alerts, {stats.get('sms_sent', 0)} customer SMS sent, {stats.get('sms_failed', 0)} failed{extra_bit}.", "success")
+    return redirect(url_for('policies.expiring'))
 
 
 @policies_bp.route('/expiring/<policy_id>/trigger-manual', methods=['POST'])
@@ -311,7 +380,7 @@ def trigger_manual_reminder(policy_id):
 
 @policies_bp.route('/<policy_id>/edit', methods=['GET', 'POST'])
 @login_required
-@role_required('admin', 'worker')
+@role_required('admin')
 def edit(policy_id):
     db = get_db()
     policy = _load_policy(policy_id)
@@ -329,6 +398,10 @@ def edit(policy_id):
     if request.method == 'POST':
         policy_number = request.form.get('policy_number', '').strip().upper()
         policy_type = request.form.get('policy_type', '').strip()
+        category = request.form.get('category', 'motor').strip()
+        pax_str = request.form.get('pax', '').strip()
+        insurance_company_id = request.form.get('insurance_company_id')
+        certificate_number = request.form.get('certificate_number', '').strip()
         effective_date = request.form.get('effective_date', '').strip()
         expiry_date = request.form.get('expiry_date', '').strip()
         premium_str = request.form.get('premium', '').strip()
@@ -341,9 +414,17 @@ def edit(policy_id):
         # premium is a valid float
         try:
             premium_amount = float(premium_str)
+            pax = int(pax_str) if pax_str else 4
         except (ValueError, TypeError):
-            flash("Premium must be a valid number.", "error")
+            flash("Premium and PAX must be valid numbers.", "error")
             return redirect(url_for('policies.edit', policy_id=policy_id))
+
+        # Resolve Underwriter name
+        insurance_company_name = policy.get('insurance_company')
+        if insurance_company_id and ObjectId.is_valid(insurance_company_id):
+            comp = db.insurance_companies.find_one({"_id": ObjectId(insurance_company_id)})
+            if comp:
+                insurance_company_name = comp.get('short_name') or comp.get('name')
 
         # Date formats and date ranges (effective_date < expiry_date)
         try:
@@ -366,18 +447,24 @@ def edit(policy_id):
             flash("Policy number must be globally unique.", "error")
             return redirect(url_for('policies.edit', policy_id=policy_id))
 
+        update_fields = {
+            "policy_number": policy_number,
+            "policy_type": policy_type,
+            "category": category if category in ["motor", "non_motor"] else "motor",
+            "pax": pax,
+            "insurance_company": insurance_company_name,
+            "certificate_number": certificate_number,
+            "effective_date": effective_date,
+            "expiry_date": expiry_date,
+            "premium_amount": premium_amount,
+            "updated_at": datetime.datetime.utcnow()
+        }
+        if insurance_company_id and ObjectId.is_valid(insurance_company_id):
+            update_fields["insurance_company_id"] = ObjectId(insurance_company_id)
+
         db.policies.update_one(
             {"_id": ObjectId(policy_id)},
-            {
-                "$set": {
-                    "policy_number": policy_number,
-                    "policy_type": policy_type,
-                    "effective_date": effective_date,
-                    "expiry_date": expiry_date,
-                    "premium_amount": premium_amount,
-                    "updated_at": datetime.datetime.utcnow()
-                }
-            }
+            {"$set": update_fields}
         )
 
         AuditService.log_action(
@@ -391,8 +478,19 @@ def edit(policy_id):
         flash("Policy updated successfully!", "success")
         return redirect(url_for('policies.detail', policy_id=policy_id))
 
+    from app.services.policy_type_service import PolicyTypeService
+    from app.services.insurance_company_service import InsuranceCompanyService
+    policy_types = PolicyTypeService.get_policy_types()
+    insurance_companies = InsuranceCompanyService.get_active_companies()
+
     policy['_id'] = str(policy['_id'])
-    return render_template('policies/edit_form.html', policy=policy, client=client)
+    return render_template(
+        'policies/edit_form.html',
+        policy=policy,
+        client=client,
+        policy_types=policy_types,
+        insurance_companies=insurance_companies
+    )
 
 
 @policies_bp.route('/<policy_id>')
@@ -449,6 +547,35 @@ def submit(policy_id):
     return redirect(url_for('policies.detail', policy_id=policy_id))
 
 
+@policies_bp.route('/underwriting-queue')
+@login_required
+@role_required('admin', 'worker')
+def underwriting_queue():
+    status_filter = request.args.get('status', '').strip().lower()
+    underwriter_filter = request.args.get('underwriter', '').strip()
+
+    queue_data = PolicyService.get_underwriting_queue(
+        user=current_user,
+        status_filter=status_filter or None,
+        underwriter_filter=underwriter_filter or None
+    )
+
+    insurance_companies = InsuranceCompanyService.get_active_companies()
+
+    return render_template(
+        'policies/underwriting_queue.html',
+        policies=queue_data['policies'],
+        total_in_queue=queue_data['total_in_queue'],
+        pending_count=queue_data['pending_count'],
+        draft_count=queue_data['draft_count'],
+        approved_count=queue_data['approved_count'],
+        total_pipeline_premium=queue_data['total_pipeline_premium'],
+        status_filter=status_filter,
+        underwriter_filter=underwriter_filter,
+        insurance_companies=insurance_companies
+    )
+
+
 @policies_bp.route('/<policy_id>/approve', methods=['POST'])
 @login_required
 @role_required('admin')
@@ -458,7 +585,7 @@ def approve(policy_id):
         flash(err, "error")
     else:
         flash("Policy approved successfully!", "success")
-    return redirect(url_for('policies.detail', policy_id=policy_id))
+    return safe_redirect(url_for('policies.detail', policy_id=policy_id))
 
 
 @policies_bp.route('/<policy_id>/reject', methods=['POST'])
@@ -470,7 +597,7 @@ def reject(policy_id):
         flash(err, "error")
     else:
         flash("Policy sent back to draft.", "warning")
-    return redirect(url_for('policies.detail', policy_id=policy_id))
+    return safe_redirect(url_for('policies.detail', policy_id=policy_id))
 
 
 @policies_bp.route('/<policy_id>/publish', methods=['POST'])
@@ -483,7 +610,7 @@ def publish(policy_id):
         flash(err, "error")
     else:
         flash("Policy published successfully and version snapshot recorded!", "success")
-    return redirect(url_for('policies.detail', policy_id=policy_id))
+    return safe_redirect(url_for('policies.detail', policy_id=policy_id))
 
 
 @policies_bp.route('/<policy_id>/cancel', methods=['POST'])
@@ -491,6 +618,12 @@ def publish(policy_id):
 @role_required('admin')
 def cancel(policy_id):
     reason = request.form.get('cancellation_reason', 'Policy cancelled by admin override').strip()
+    success, err = PolicyService.update_policy_status(policy_id, "cancelled", str(current_user.id), change_summary=reason)
+    if err:
+        flash(err, "error")
+    else:
+        flash("Policy has been successfully revoked and cancelled.", "warning")
+    return safe_redirect(url_for('policies.detail', policy_id=policy_id))
     success, err = PolicyService.update_policy_status(policy_id, "cancelled", str(current_user.id), change_summary=reason)
     if err:
         flash(err, "error")
@@ -536,7 +669,7 @@ def extend(policy_id):
 
     if policy.get('status') != 'published':
         flash("Only published policies can be extended.", "error")
-        return redirect(request.referrer or url_for('policies.list'))
+        return safe_redirect(url_for('policies.list'))
 
     effective_date = request.form.get('effective_date', '').strip()
     expiry_date = request.form.get('expiry_date', '').strip()
@@ -580,3 +713,126 @@ def extend(policy_id):
 
     flash("Policy successfully extended.", "success")
     return redirect(url_for('policies.detail', policy_id=policy_id))
+
+
+@policies_bp.route('/<policy_id>/suspend', methods=['POST'])
+@login_required
+@role_required('admin')
+def suspend(policy_id):
+    _load_policy(policy_id, "You are not authorized to suspend this policy")
+    reason = request.form.get('suspension_reason', 'Policy suspended by administration').strip()
+    success, err = PolicyService.update_policy_status(
+        policy_id, "suspended", str(current_user.id), change_summary=f"Suspended: {reason}"
+    )
+    if err:
+        flash(err, "error")
+    else:
+        flash("Policy has been suspended.", "warning")
+    return safe_redirect(url_for('policies.detail', policy_id=policy_id))
+
+
+@policies_bp.route('/<policy_id>/reactivate', methods=['POST'])
+@login_required
+@role_required('admin')
+def reactivate(policy_id):
+    _load_policy(policy_id, "You are not authorized to reactivate this policy")
+    success, err = PolicyService.update_policy_status(
+        policy_id, "published", str(current_user.id), change_summary="Policy reactivated to published status"
+    )
+    if err:
+        flash(err, "error")
+    else:
+        flash("Policy has been successfully reactivated to Active.", "success")
+    return safe_redirect(url_for('policies.detail', policy_id=policy_id))
+
+
+@policies_bp.route('/companies', endpoint='companies')
+@login_required
+@role_required('admin', 'worker')
+def list_companies():
+    from app.services.insurance_company_service import InsuranceCompanyService
+    search_query = request.args.get('search', '').strip()
+    status_filter = request.args.get('status', '').strip()
+    companies = InsuranceCompanyService.get_companies(
+        search_query=search_query,
+        status_filter=status_filter
+    )
+    active_count = sum(1 for c in companies if c.get('is_active'))
+    inactive_count = len(companies) - active_count
+    total_vehicles = sum(c.get('vehicle_count', 0) for c in companies)
+
+    return render_template(
+        'policies/companies.html',
+        companies=companies,
+        search_query=search_query,
+        status_filter=status_filter,
+        active_count=active_count,
+        inactive_count=inactive_count,
+        total_vehicles=total_vehicles
+    )
+
+
+@policies_bp.route('/companies/add', methods=['POST'])
+@login_required
+@role_required('admin')
+def add_company():
+    from app.services.insurance_company_service import InsuranceCompanyService
+    name = request.form.get('name', '').strip()
+    short_name = request.form.get('short_name', '').strip()
+    code = request.form.get('code', '').strip()
+    phone = request.form.get('phone', '').strip()
+    email = request.form.get('email', '').strip()
+    commission_rate = request.form.get('commission_rate', '10.0').strip()
+    contact_person = request.form.get('contact_person', '').strip()
+
+    if not name:
+        flash("Company name is required.", "error")
+        return redirect(url_for('policies.companies'))
+
+    InsuranceCompanyService.add_company(name, short_name, code, phone, email, commission_rate=commission_rate, contact_person=contact_person)
+    flash(f"Insurance underwriter '{name}' added successfully.", "success")
+    return redirect(url_for('policies.companies'))
+
+
+@policies_bp.route('/companies/<company_id>/edit', methods=['POST'])
+@login_required
+@role_required('admin')
+def edit_company(company_id):
+    from app.services.insurance_company_service import InsuranceCompanyService
+    name = request.form.get('name', '').strip()
+    short_name = request.form.get('short_name', '').strip()
+    code = request.form.get('code', '').strip()
+    phone = request.form.get('phone', '').strip()
+    email = request.form.get('email', '').strip()
+    commission_rate = request.form.get('commission_rate', '10.0').strip()
+    contact_person = request.form.get('contact_person', '').strip()
+    is_active = request.form.get('is_active') == '1'
+
+    if not name:
+        flash("Company name is required.", "error")
+        return redirect(url_for('policies.companies'))
+
+    ok, err = InsuranceCompanyService.update_company(
+        company_id, name, short_name, code, phone, email,
+        commission_rate=commission_rate, contact_person=contact_person, is_active=is_active
+    )
+    if ok:
+        flash(f"Underwriter profile '{name}' updated successfully.", "success")
+    else:
+        flash(err or "Failed to update underwriter profile.", "error")
+    return redirect(url_for('policies.companies'))
+
+
+@policies_bp.route('/companies/<company_id>/toggle', methods=['POST'])
+@login_required
+@role_required('admin')
+def toggle_company(company_id):
+    from app.services.insurance_company_service import InsuranceCompanyService
+    ok, new_status = InsuranceCompanyService.toggle_status(company_id)
+    if ok:
+        status_label = "activated" if new_status else "deactivated"
+        flash(f"Insurance provider status updated to {status_label}.", "success")
+    else:
+        flash("Failed to update insurance provider status.", "error")
+    return redirect(url_for('policies.companies'))
+

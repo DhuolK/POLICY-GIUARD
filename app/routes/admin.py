@@ -1,5 +1,6 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, abort
 from flask_login import login_required, current_user
+from app.utils.redirects import safe_redirect
 from ..utils.decorators import role_required
 from ..extensions import get_db
 from ..services.auth_service import AuthService
@@ -114,16 +115,16 @@ def set_user_active(user_id):
     action = request.form.get('action', '').strip().lower()
     if action not in ('enable', 'disable'):
         flash("Invalid action specified.", "error")
-        return redirect(request.referrer or url_for('admin.users'))
+        return safe_redirect(url_for('admin.users'))
 
     if str(user_id) == str(current_user.id):
         flash("You cannot disable your own account.", "error")
-        return redirect(request.referrer or url_for('admin.users'))
+        return safe_redirect(url_for('admin.users'))
 
     user, err = AuthService.set_disabled(user_id, disabled=(action == 'disable'))
     if err:
         flash(err, "error")
-        return redirect(request.referrer or url_for('admin.users'))
+        return safe_redirect(url_for('admin.users'))
 
     AuditService.log_action(
         entity_type='user',
@@ -134,7 +135,56 @@ def set_user_active(user_id):
     )
     name = user.get('full_name') or user.get('email')
     flash(f"Account for {name} has been {action}d.", "success")
-    return redirect(request.referrer or url_for('admin.users'))
+    return safe_redirect(url_for('admin.users'))
+
+@admin_bp.route('/users/<user_id>/reset-password', methods=['POST'])
+@login_required
+@role_required('admin')
+def reset_user_password(user_id):
+    """Admin override to reset staff member's password."""
+    new_password = request.form.get('new_password', '').strip()
+    if not new_password:
+        flash("New password is required.", "error")
+        return safe_redirect(url_for('admin.users'))
+
+    user, err = AuthService.reset_password(user_id, new_password)
+    if err:
+        flash(err, "error")
+        return safe_redirect(url_for('admin.users'))
+
+    AuditService.log_action(
+        entity_type='user',
+        entity_id=str(user_id),
+        action='reset_password',
+        performed_by=str(current_user.id),
+        details={"email": user.get('email'), "full_name": user.get('full_name')}
+    )
+    flash(f"Password for {user.get('full_name', 'staff member')} has been reset successfully.", "success")
+    return safe_redirect(url_for('admin.users'))
+
+@admin_bp.route('/users/reassign-portfolio', methods=['POST'])
+@login_required
+@role_required('admin')
+def reassign_portfolio():
+    """Bulk reassign client portfolio from one staff member to another."""
+    from ..services.client_service import ClientService
+    source_id = request.form.get('source_worker_id', '').strip()
+    target_id = request.form.get('target_worker_id', '').strip()
+
+    count, err = ClientService.bulk_reassign_clients(source_id, target_id)
+    if err:
+        flash(err, "error")
+        return safe_redirect(url_for('admin.users'))
+
+    AuditService.log_action(
+        entity_type='client_portfolio',
+        entity_id=str(target_id),
+        action='bulk_reassign',
+        performed_by=str(current_user.id),
+        details={"source_worker_id": source_id, "target_worker_id": target_id, "count": count}
+    )
+    flash(f"Successfully reassigned {count} client(s) to the target staff member.", "success")
+    return safe_redirect(url_for('admin.users'))
 
 @admin_bp.route('/audit')
 @login_required

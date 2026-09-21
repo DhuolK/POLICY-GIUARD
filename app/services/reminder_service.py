@@ -21,7 +21,15 @@ from pymongo.errors import DuplicateKeyError
 
 from app.extensions import get_db
 from app.services.audit_service import AuditService
-from app.services.sms_service import send_sms, customer_reminder_message
+from app.services.sms_engine import (
+    enqueue_sms, drain_outbox,
+    PRIORITY_STANDARD,
+    KIND_RENEWAL,
+    STATUS_DELIVERED, STATUS_SENT, STATUS_FAILED, STATUS_DEAD,
+    STATUS_SUPPRESSED,
+)
+from app.services.sms_service import customer_reminder_message
+from app.services.sms_templates import render as render_template, KEY_RENEWAL
 from app.services.notification_service import (
     NotificationService, CATEGORY_REMINDER, CATEGORY_SMS_SUCCESS,
     CATEGORY_SMS_FAILED, CATEGORY_PHONE_MISSING, SEVERITY_WARNING,
@@ -100,7 +108,7 @@ class ReminderService:
             days_remaining = (expiry_dt - current_date).days
 
             # Filter threshold
-            if not (0 <= days_remaining <= 7):
+            if not (0 <= days_remaining <= 180):
                 continue
 
             # Build a FRESH view-model row — never mutate the caller's dict
@@ -226,14 +234,21 @@ class ReminderService:
     # ================================================================= engine
 
     @staticmethod
-    def run_due_reminders(user_id=None, user=None):
+    def run_due_reminders(user_id=None, user=None, drain=True):
         """Scan caller-scoped expiring policies and dispatch BOTH legs.
 
         For every policy exactly N days from expiry (N in the configured
         offsets): one staff bell notice and one customer SMS. Jobs are claimed
         atomically via the partial unique index — re-runs are no-ops.
 
-        Returns {'staff_sent': n, 'sms_sent': n, 'sms_failed': n}.
+        The SMS leg is enqueue-then-drain: messages land in `sms_outbox`
+        (idempotency key ``renewal:<policy>:<offset>``) where quiet hours,
+        opt-out and frequency caps apply, then a bounded drain sends what is
+        due — transactional lanes first. ``drain=False`` only queues (used
+        when the caller drains in bulk afterwards).
+
+        Returns {'staff_sent': n, 'sms_sent': n, 'sms_failed': n,
+                 'sms_suppressed': n, 'sms_retrying': n}.
         """
         db = get_db()
         ReminderService._ensure_indexes()
@@ -241,10 +256,12 @@ class ReminderService:
         staff_offsets = set(settings.get('staff_offsets') or [])
         sms_offsets = set(settings.get('sms_offsets') or [])
 
-        stats = {'staff_sent': 0, 'sms_sent': 0, 'sms_failed': 0}
+        stats = {'staff_sent': 0, 'sms_sent': 0, 'sms_failed': 0,
+                 'sms_suppressed': 0, 'sms_retrying': 0}
 
         performer = ReminderService._resolve_performer(db, user_id)
 
+        pending = []  # (policy, pid_raw, days, outbox_doc|None)
         for policy in ReminderService.get_expiring_soon_policies(user=user):
             days = policy['days_remaining']
             pid_raw = ObjectId(policy['_id'])
@@ -264,9 +281,28 @@ class ReminderService:
 
             if days in sms_offsets and ReminderService._claim_job(
                     pid_raw, KIND_CUSTOMER_SMS, days):
-                sent_ok = ReminderService._dispatch_customer_sms(
+                outbox_doc = ReminderService._enqueue_customer_sms(
                     policy, pid_raw, days)
-                stats['sms_sent' if sent_ok else 'sms_failed'] += 1
+                if outbox_doc is None:
+                    # No usable number — same contract as before: fail the
+                    # job loudly so staff fix the contact.
+                    stats['sms_failed'] += 1
+                else:
+                    pending.append((policy, pid_raw, days, outbox_doc))
+
+        if drain and pending:
+            drain_outbox()
+            fresh = {str(d['_id']): d for d in get_db().sms_outbox.find(
+                {'_id': {'$in': [p[3]['_id'] for p in pending]}})}
+            for policy, pid_raw, days, queued in pending:
+                doc = fresh.get(str(queued['_id']), queued)
+                if str(doc.get('status')) in ('queued', 'sending'):
+                    # Deferred by quiet hours / frequency cap — the claim
+                    # stays pending (non-final) and sync_ledger_from_outbox
+                    # records the real outcome once it sends.
+                    continue
+                ReminderService._record_sms_outcome(
+                    policy, pid_raw, days, doc, stats, manual=False)
 
         if any(stats.values()):
             AuditService.log_action(
@@ -310,14 +346,18 @@ class ReminderService:
             {'$set': update})
 
     @classmethod
-    def _dispatch_customer_sms(cls, policy, pid_raw, days, manual=False):
-        """SMS leg: resolve destination, send, record outcome, inform staff."""
+    def _enqueue_customer_sms(cls, policy, pid_raw, days, manual=False,
+                              force=False):
+        """SMS leg, half 1: resolve destination, render DB template, enqueue.
+
+        Returns the outbox doc, or None when there is no usable number (the
+        caller then fails loudly so staff fix the contact). Never touches
+        the provider — the drain does that.
+        """
         db = get_db()
         number = policy['policy_number']
         client_name = policy.get('client_name') or 'Unknown'
         destination = policy.get('client_phone_e164')
-
-        job_update = {}
 
         if not destination:
             cls._note_job_failure(db, pid_raw, days, manual,
@@ -328,51 +368,180 @@ class ReminderService:
                 f"Cannot remind {client_name}: no valid phone number "
                 f"for policy {number}.",
                 policy_id=pid_raw, policy_number=number)
+            return None
+
+        type_bit = f"{policy.get('policy_type')} " if policy.get(
+            'policy_type') else ''
+        message, template_version = render_template(
+            KEY_RENEWAL, type_bit=type_bit, policy_number=number,
+            days_remaining=days)
+        if manual:
+            import uuid as _uuid
+            key = f"manual:{pid_raw}:{_uuid.uuid4().hex}"
+        else:
+            key = f"renewal:{pid_raw}:{int(days)}"
+        return enqueue_sms(
+            destination, message, KIND_RENEWAL,
+            priority=PRIORITY_STANDARD,
+            idempotency_key=key,
+            template_key=KEY_RENEWAL, template_version=template_version,
+            policy_id=pid_raw, manual=manual, force=force,
+            meta={'reminder_policy_id': str(pid_raw),
+                  'offset_days': int(days),
+                  'policy_number': number,
+                  'client_name': client_name})
+
+    # Backwards-compatible alias: manual sends and older tests enqueue and
+    # drain immediately, preserving the old synchronous True/False contract.
+    @classmethod
+    def _dispatch_customer_sms(cls, policy, pid_raw, days, manual=False):
+        doc = cls._enqueue_customer_sms(policy, pid_raw, days, manual=manual,
+                                        force=bool(manual))
+        if doc is None:
             return False
+        drain_outbox()
+        fresh = get_db().sms_outbox.find_one({'_id': doc['_id']}) or doc
+        stats = {'staff_sent': 0, 'sms_sent': 0, 'sms_failed': 0,
+                 'sms_suppressed': 0, 'sms_retrying': 0}
+        cls._record_sms_outcome(policy, pid_raw, days, fresh, stats,
+                                manual=manual)
+        return bool(stats['sms_sent'])
 
-        message = customer_reminder_message(
-            number, days, policy_type=policy.get('policy_type'))
-        result = send_sms(destination, message)
+    @classmethod
+    def _record_sms_outcome(cls, policy, pid_raw, days, outbox_doc, stats,
+                            manual=False):
+        """SMS leg, half 2: mirror one drained outbox doc into the reminders
+        ledger + staff bell + stats. Only touches non-final ledger states so
+        late retries/DLRs can still upgrade via sync_ledger_from_outbox."""
+        db = get_db()
+        number = policy.get('policy_number')
+        client_name = policy.get('client_name') or 'Unknown'
+        destination = outbox_doc.get('destination')
+        status = outbox_doc.get('status')
+        now = datetime.datetime.utcnow()
 
-        if result.ok:
-            status = 'simulated' if result.simulated else 'sent'
+        if status == STATUS_SUPPRESSED:
             job_update = {
-                'status': status, 'channel': 'sms', 'destination': destination,
-                'provider_ref': result.provider_ref, 'provider_status': result.status,
+                'status': 'suppressed', 'channel': 'sms',
+                'destination': destination,
+                'error': outbox_doc.get('last_error'),
+                'days_remaining': days, 'manual': bool(manual),
+                'outbox_id': outbox_doc['_id'],
+                'sent_at': now,
+            }
+            stats['sms_suppressed'] += 1
+            bell = False
+        elif status == STATUS_DELIVERED and outbox_doc.get('simulated'):
+            job_update = {
+                'status': 'simulated', 'channel': 'sms',
+                'destination': destination,
+                'provider_ref': outbox_doc.get('provider_ref'),
+                'provider_status': outbox_doc.get('provider_status'),
                 'error': None, 'days_remaining': days,
                 'manual': bool(manual),
-                'sent_at': datetime.datetime.utcnow(),
+                'outbox_id': outbox_doc['_id'],
+                'sent_at': now,
             }
-            sim_bit = ' (simulated)' if result.simulated else ''
-            NotificationService.create_staff(
-                CATEGORY_SMS_SUCCESS, SEVERITY_SUCCESS,
-                'Renewal reminder sent',
-                f"SMS for policy {number} was delivered{sim_bit} to "
-                f"{client_name} ({destination}).",
-                policy_id=pid_raw, policy_number=number)
-        else:
+            stats['sms_sent'] += 1
+            bell = ('Renewal reminder sent',
+                    f"SMS for policy {number} was delivered (simulated) to "
+                    f"{client_name} ({destination}).",
+                    CATEGORY_SMS_SUCCESS, SEVERITY_SUCCESS)
+        elif status in (STATUS_DELIVERED, STATUS_SENT):
             job_update = {
-                'status': 'failed', 'channel': 'sms', 'destination': destination,
-                'provider_status': result.status, 'error': result.error,
-                'days_remaining': days, 'manual': bool(manual),
-                'sent_at': datetime.datetime.utcnow(),
+                'status': 'delivered' if status == STATUS_DELIVERED else 'sent',
+                'channel': 'sms', 'destination': destination,
+                'provider_ref': outbox_doc.get('provider_ref'),
+                'provider_status': outbox_doc.get('provider_status'),
+                'error': None, 'days_remaining': days,
+                'manual': bool(manual),
+                'outbox_id': outbox_doc['_id'],
+                'sent_at': now,
             }
-            NotificationService.create_staff(
-                CATEGORY_SMS_FAILED, SEVERITY_ERROR,
-                'SMS delivery failed',
-                f"Renewal reminder for {number} could not be delivered to "
-                f"{destination}: {result.error}",
-                policy_id=pid_raw, policy_number=number)
+            stats['sms_sent'] += 1
+            bell = ('Renewal reminder sent',
+                    f"SMS for policy {number} was accepted by the provider "
+                    f"for {client_name} ({destination}). Delivery pending "
+                    f"confirmation.",
+                    CATEGORY_SMS_SUCCESS, SEVERITY_SUCCESS)
+        elif status == STATUS_FAILED:
+            # Transient failure with retries still scheduled — ledger says
+            # retrying (non-final) so a later drain can upgrade it; no bell
+            # yet, the DLQ bell fires only if it actually dies.
+            job_update = {
+                'status': 'retrying', 'channel': 'sms',
+                'destination': destination,
+                'provider_status': outbox_doc.get('provider_status'),
+                'error': outbox_doc.get('last_error'),
+                'days_remaining': days, 'manual': bool(manual),
+                'outbox_id': outbox_doc['_id'],
+                'sent_at': now,
+            }
+            stats['sms_retrying'] += 1
+            bell = False
+        else:  # STATUS_DEAD or anything unexpected → terminal failure
+            job_update = {
+                'status': 'failed', 'channel': 'sms',
+                'destination': destination,
+                'provider_status': outbox_doc.get('provider_status'),
+                'error': outbox_doc.get('last_error'),
+                'days_remaining': days, 'manual': bool(manual),
+                'outbox_id': outbox_doc['_id'],
+                'sent_at': now,
+            }
+            stats['sms_failed'] += 1
+            bell = ('SMS delivery failed',
+                    f"Renewal reminder for {number} could not be delivered "
+                    f"to {destination}: {outbox_doc.get('last_error')}",
+                    CATEGORY_SMS_FAILED, SEVERITY_ERROR)
 
         if manual:
             db.reminders.insert_one(dict(
                 job_update, policy_id=pid_raw, kind=KIND_CUSTOMER_SMS,
                 policy_number=number, client_name=client_name,
                 days_remaining=days,
-                created_at=datetime.datetime.utcnow()))
+                created_at=now))
         else:
-            cls._finish_job(pid_raw, KIND_CUSTOMER_SMS, days, job_update)
-        return bool(result.ok)
+            current = db.reminders.find_one(
+                {'policy_id': pid_raw, 'kind': KIND_CUSTOMER_SMS,
+                 'offset_days': int(days)})
+            if current is None or str(
+                    current.get('status')) in (
+                        'pending', 'queued', 'retrying'):
+                cls._finish_job(pid_raw, KIND_CUSTOMER_SMS, days, job_update)
+        if bell:
+            title, body, category, severity = bell
+            NotificationService.create_staff(
+                category, severity, title, body,
+                policy_id=pid_raw, policy_number=number)
+
+    @staticmethod
+    def sync_ledger_from_outbox(outbox_docs):
+        """Upgrade non-final reminder ledger rows from later drain outcomes
+        (retries that succeeded, DLRs that landed, quiet-hour defers that
+        have since sent). Bells fire once — only for rows still non-final."""
+        stats = {'staff_sent': 0, 'sms_sent': 0, 'sms_failed': 0,
+                 'sms_suppressed': 0, 'sms_retrying': 0}
+        for doc in outbox_docs or []:
+            if doc.get('kind') != KIND_RENEWAL:
+                continue
+            if str(doc.get('status')) in (
+                    'queued', 'sending', STATUS_FAILED):
+                continue  # not yet final; ledger already says pending/retrying
+            meta = doc.get('meta') or {}
+            pid_raw = meta.get('reminder_policy_id')
+            if pid_raw is None:
+                continue
+            try:
+                pid = ObjectId(pid_raw)
+            except Exception:
+                continue
+            policy = {'policy_number': meta.get('policy_number'),
+                      'client_name': meta.get('client_name')}
+            ReminderService._record_sms_outcome(
+                policy, pid, meta.get('offset_days', 0), doc, stats,
+                manual=bool(doc.get('manual')))
+        return stats
 
     @staticmethod
     def _note_job_failure(db, pid_raw, days, manual, reason):

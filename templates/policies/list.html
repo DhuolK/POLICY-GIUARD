@@ -1,200 +1,674 @@
 {% extends 'base.html' %}
 
+{% block title %}Policies Directory — Policy Guard{% endblock %}
+
 {% block content %}
-<div class="flex flex-col gap-6">
-    <header class="flex justify-between items-end mb-4">
+<div class="flex flex-col gap-6 max-w-7xl mx-auto w-full">
+
+    <!-- Page Header & Action Bar -->
+    <header class="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 pb-2 border-b border-divider/60">
         <div>
-            <h1 class="text-3xl font-display font-bold text-ink">Policies</h1>
-            <p class="text-muted mt-1">Manage all insurance policies</p>
+            <div class="flex items-center gap-2 text-xs text-muted font-medium mb-1">
+                <span>Management</span>
+                <span>&rsaquo;</span>
+                <span class="text-ink font-semibold">Policies Registry</span>
+            </div>
+            <h1 class="text-3xl sm:text-4xl font-display font-bold text-ink tracking-tight">Insurance Policies</h1>
+            <p class="text-muted text-xs sm:text-sm mt-1">Operational registry for underwriting, lifecycle extensions, and vehicle coverage</p>
         </div>
-        
-        <div class="flex gap-4">
-            <a href="{{ url_for('policies.expiring') }}" class="magnetic-btn border border-divider text-ink hover:bg-surface px-6 py-2.5 rounded-full font-medium flex items-center gap-1.5 transition-all text-sm shadow-sm hover:shadow-md">
-                ⏰ Expiring Soon
+
+        <div class="flex flex-wrap items-center gap-2.5 sm:gap-3 w-full sm:w-auto">
+            <a href="{{ url_for('policies.companies') }}" class="apple-btn flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-full text-xs font-semibold text-primary bg-primary-50/80 hover:bg-primary-50 border border-primary-200/60 shadow-sm transition-all">
+                <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
+                <span>Underwriters (56)</span>
             </a>
-            <a href="{{ url_for('policies.new') }}" class="magnetic-btn bg-primary text-surface px-6 py-2.5 rounded-full font-medium shadow-sm hover:shadow-md transition-shadow">
-                + Add Issued Policy
+            <a href="{{ url_for('policies.expiring') }}" class="apple-btn flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-full text-xs font-semibold text-amber-700 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 shadow-sm transition-all">
+                <svg class="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                <span>Expiring Soon</span>
+            </a>
+            <a href="{{ url_for('policies.new') }}" class="apple-btn flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-full text-xs font-semibold text-surface bg-primary hover:bg-primary-dark shadow-sm transition-all">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                <span>Issue New Policy</span>
             </a>
         </div>
     </header>
 
-    <!-- Tab Navigation -->
-    <div class="border-b border-divider/50 flex gap-6 text-sm font-medium mb-2">
-        <button onclick="switchTab('issued')" id="tab-btn-issued" class="tab-btn pb-4 border-b-2 border-primary text-primary transition-all">Issued Policies ({{ policies|length }})</button>
-        <button onclick="switchTab('available')" id="tab-btn-available" class="tab-btn pb-4 border-b-2 border-transparent text-muted hover:text-ink transition-all">Available Policy Types ({{ policy_types|length }})</button>
+    <!-- Category Segmented Controls & Main Tabs -->
+    <div class="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
+        <!-- Business Category Toggle (Motor vs Non Motor) -->
+        <div class="flex items-center p-1 rounded-2xl bg-slate-200/70 border border-slate-300/50 shadow-subtle-inner w-full sm:w-fit">
+            <a href="{{ url_for('policies.list', search=search_query, category='all', sort=sort) }}" class="flex-1 sm:flex-initial px-4 py-1.5 rounded-xl text-xs font-semibold transition-all {% if category == 'all' or not category %}bg-surface text-primary shadow-sm{% else %}text-muted hover:text-ink{% endif %}">
+                All Business
+            </a>
+            <a href="{{ url_for('policies.list', search=search_query, category='motor', sort=sort) }}" class="flex-1 sm:flex-initial px-4 py-1.5 rounded-xl text-xs font-semibold transition-all {% if category == 'motor' %}bg-surface text-primary shadow-sm{% else %}text-muted hover:text-ink{% endif %}">
+                🚗 Motor Business
+            </a>
+            <a href="{{ url_for('policies.list', search=search_query, category='non_motor', sort=sort) }}" class="flex-1 sm:flex-initial px-4 py-1.5 rounded-xl text-xs font-semibold transition-all {% if category == 'non_motor' %}bg-surface text-primary shadow-sm{% else %}text-muted hover:text-ink{% endif %}">
+                🏢 Non Motor Business
+            </a>
+        </div>
+
+        <!-- Section View Tabs (Policies vs Types) -->
+        <div class="flex items-center p-1 rounded-2xl bg-slate-100 border border-slate-200/80 shadow-subtle-inner self-end sm:self-auto">
+            <button onclick="switchTab('issued')" id="tab-btn-issued" class="tab-btn px-4 py-1.5 rounded-xl text-xs font-semibold text-primary bg-surface shadow-sm transition-all duration-200">
+                Issued Policies ({{ policies_page.total }})
+            </button>
+            <button onclick="switchTab('available')" id="tab-btn-available" class="tab-btn px-4 py-1.5 rounded-xl text-xs font-semibold text-muted hover:text-ink transition-all duration-200">
+                Policy Types ({{ policy_types|length }})
+            </button>
+        </div>
     </div>
 
-    <!-- Tab Content: Issued Policies -->
-    <div id="content-issued" class="tab-content flex flex-col gap-6">
-        <!-- Stats and Search -->
-        <div class="flex flex-col md:flex-row gap-4 justify-between items-center mb-2">
-            <div class="flex gap-4">
-                <div class="glass px-4 py-2 rounded-full text-sm font-medium">
-                    <span class="text-primary">{{ status_counts.get('published', 0) }}</span> Active
+    <!-- Tab 1: Issued Policies Content -->
+    <div id="content-issued" class="tab-content flex flex-col gap-5">
+
+        <!-- Metrics & Search Filter Toolbar -->
+        <div class="flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-3">
+            <!-- Metric Pill Chips -->
+            <div class="flex flex-wrap items-center gap-2">
+                <div class="glass-card px-3.5 py-1.5 rounded-full text-xs font-medium flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                    <span class="text-muted">Active:</span>
+                    <strong class="text-ink font-semibold font-mono">{{ status_counts.get('published', 0) }}</strong>
                 </div>
-                <div class="glass px-4 py-2 rounded-full text-sm font-medium">
-                    <span class="text-accent">{{ status_counts.get('suspended', 0) }}</span> Suspended
+                <div class="glass-card px-3.5 py-1.5 rounded-full text-xs font-medium flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+                    <span class="text-muted">Suspended:</span>
+                    <strong class="text-ink font-semibold font-mono">{{ status_counts.get('suspended', 0) }}</strong>
+                </div>
+                <div class="glass-card px-3.5 py-1.5 rounded-full text-xs font-medium flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-slate-400"></span>
+                    <span class="text-muted">Draft:</span>
+                    <strong class="text-ink font-semibold font-mono">{{ status_counts.get('draft', 0) }}</strong>
                 </div>
             </div>
-            
-            <form method="GET" class="flex gap-2 w-full md:w-1/3">
-                <input type="text" name="search" value="{{ search_query or '' }}" placeholder="Search by policy number..." class="flex-1 bg-surface border border-divider rounded-full px-4 py-2 text-sm focus:outline-none focus:border-primary">
-                <button type="submit" class="magnetic-btn bg-ink text-surface px-4 py-2 rounded-full text-sm font-medium">Search</button>
+
+            <!-- Search & Page Size Form -->
+            <form method="GET" class="flex flex-col sm:flex-row items-center gap-2 w-full lg:w-auto">
+                {% if category %}
+                <input type="hidden" name="category" value="{{ category }}">
+                {% endif %}
+                <div class="relative w-full sm:w-80">
+                    <svg class="w-4 h-4 text-muted absolute left-3.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                    <input type="text" name="search" value="{{ search_query or '' }}" placeholder="Search policy #, reg plate, client..." class="w-full bg-surface border border-divider rounded-full pl-9 pr-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all">
+                </div>
+                <div class="flex items-center gap-2 w-full sm:w-auto">
+                    <select name="per_page" class="flex-1 sm:flex-initial bg-surface border border-divider rounded-full px-3 py-2 text-xs text-ink focus:outline-none focus:border-primary transition-all">
+                        <option value="10" {% if per_page == 10 %}selected{% endif %}>10 per page</option>
+                        <option value="25" {% if per_page == 25 %}selected{% endif %}>25 per page</option>
+                        <option value="50" {% if per_page == 50 %}selected{% endif %}>50 per page</option>
+                        <option value="100" {% if per_page == 100 %}selected{% endif %}>100 per page</option>
+                    </select>
+                    <button type="submit" class="apple-btn bg-ink hover:bg-slate-800 text-surface px-5 py-2 rounded-full text-xs font-semibold shadow-sm">
+                        Search
+                    </button>
+                </div>
             </form>
         </div>
 
-        <div class="glass rounded-3xl p-1 overflow-hidden">
+        <!-- Desktop Policies Table View (>= 768px) -->
+        <div class="hidden md:block glass-card rounded-3xl overflow-hidden shadow-glass border border-slate-200/80">
             <div class="overflow-x-auto">
-                <table class="w-full text-left border-collapse">
+                <table class="w-full text-left border-collapse text-xs">
                     <thead>
-                        <tr class="border-b border-divider/50 bg-surface/30">
-                            <th class="py-4 px-6 font-medium text-sm text-muted">Policy Number</th>
-                            <th class="py-4 px-6 font-medium text-sm text-muted">Client</th>
-                            <th class="py-4 px-6 font-medium text-sm text-muted">Vehicle</th>
-                            <th class="py-4 px-6 font-medium text-sm text-muted">Type</th>
-                            <th class="py-4 px-6 font-medium text-sm text-muted">Effective Date</th>
-                            <th class="py-4 px-6 font-medium text-sm text-muted">Status</th>
-                            <th class="py-4 px-6 font-medium text-sm text-muted text-right">Actions</th>
+                        <tr class="border-b border-divider/60 bg-slate-50/60 text-[11px] font-semibold text-muted uppercase tracking-wider">
+                            <th class="py-3.5 px-3 w-10 text-center">#</th>
+                            <th class="py-3.5 px-3">Policy Number</th>
+                            <th class="py-3.5 px-3">Vehicle</th>
+                            <th class="py-3.5 px-2 text-center">PAX</th>
+                            <th class="py-3.5 px-3">Policy Owner</th>
+                            <th class="py-3.5 px-3">Insurance Company</th>
+                            <th class="py-3.5 px-3">Start Date</th>
+                            <th class="py-3.5 px-3">Exp Date</th>
+                            <th class="py-3.5 px-3">Type</th>
+                            <th class="py-3.5 px-3 text-center">Status</th>
+                            <th class="py-3.5 px-4 text-right">Action</th>
                         </tr>
                     </thead>
-                    <tbody class="text-sm">
-                        {% for policy in policies %}
-                        <tr class="border-b border-divider/30 hover:bg-surface/50 transition-colors">
-                            <td class="py-4 px-6 font-mono font-medium text-ink">{{ policy.policy_number }}</td>
-                            <td class="py-4 px-6">{{ policy.client_name }}</td>
-                            <td class="py-4 px-6 font-mono">{{ policy.vehicle_reg }}</td>
-                            <td class="py-4 px-6 capitalize">{{ policy.policy_type }}</td>
-                            <td class="py-4 px-6 text-muted">{{ policy.effective_date }}</td>
-                            <td class="py-4 px-6">
-                                {% if policy.status == 'published' %}
-                                    <span class="px-3 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">Active</span>
-                                {% elif policy.status == 'suspended' %}
-                                    <span class="px-3 py-1 rounded-full text-xs font-medium bg-accent/10 text-accent">Suspended</span>
-                                {% else %}
-                                    <span class="px-3 py-1 rounded-full text-xs font-medium bg-muted/10 text-muted">{{ policy.status|title }}</span>
+                    <tbody class="divide-y divide-divider/40">
+                        {% for policy in policies_page['items'] %}
+                        <tr class="hover:bg-slate-50/80 transition-colors group">
+                            <!-- # Row Index -->
+                            <td class="py-3 px-3 text-center font-mono text-muted text-[11px]">
+                                {{ (page - 1) * per_page + loop.index }}
+                            </td>
+
+                            <!-- Policy Number -->
+                            <td class="py-3 px-3">
+                                <a href="{{ url_for('policies.detail', policy_id=policy._id) }}" class="font-mono font-bold text-primary group-hover:underline flex items-center gap-1">
+                                    <span>{{ policy.policy_number }}</span>
+                                </a>
+                                {% if policy.certificate_number %}
+                                <span class="text-[10px] text-muted font-mono block">Cert: {{ policy.certificate_number }}</span>
                                 {% endif %}
                             </td>
-                            <td class="py-4 px-6 text-right flex justify-end gap-3">
-                                <a href="{{ url_for('policies.detail', policy_id=policy._id) }}" class="text-primary hover:underline font-medium">View</a>
+
+                            <!-- Vehicle -->
+                            <td class="py-3 px-3">
+                                {% if policy.vehicle_reg and policy.vehicle_reg != 'Unknown' and policy.vehicle_reg != 'N/A' %}
+                                <span class="inline-block bg-slate-100 border border-slate-200/80 px-2 py-0.5 rounded-md font-mono font-bold text-ink text-[11px]">
+                                    {{ policy.vehicle_reg }}
+                                </span>
+                                {% else %}
+                                <span class="text-muted italic text-[11px]">—</span>
+                                {% endif %}
+                            </td>
+
+                            <!-- PAX -->
+                            <td class="py-3 px-2 text-center font-mono font-semibold text-slate-700">
+                                {{ policy.pax if policy.pax is defined else 4 }}
+                            </td>
+
+                            <!-- Policy Owner -->
+                            <td class="py-3 px-3">
+                                <span class="font-semibold text-ink block">{{ policy.client_name }}</span>
+                            </td>
+
+                            <!-- Insurance Company -->
+                            <td class="py-3 px-3">
+                                <span class="font-medium text-slate-700 block truncate max-w-[140px]" title="{{ policy.insurance_company or 'Westlake Underwriting' }}">
+                                    {{ policy.insurance_company or 'Westlake Underwriting' }}
+                                </span>
+                            </td>
+
+                            <!-- Start Date -->
+                            <td class="py-3 px-3 font-mono text-muted text-[11px]">
+                                {{ policy.effective_date or '—' }}
+                            </td>
+
+                            <!-- Exp Date -->
+                            <td class="py-3 px-3 font-mono text-muted text-[11px]">
+                                <div>{{ policy.expiry_date or '—' }}</div>
+                            </td>
+
+                            <!-- Type -->
+                            <td class="py-3 px-3">
+                                <span class="capitalize font-medium text-ink block">{{ policy.policy_type|replace('_', ' ') }}</span>
+                                {% if policy.premium_amount %}
+                                <span class="text-[10px] text-muted font-mono">KES {{ "{:,.0f}".format(policy.premium_amount) if policy.premium_amount is number else policy.premium_amount }}</span>
+                                {% endif %}
+                            </td>
+
+                            <!-- Status Badge -->
+                            <td class="py-3 px-3 text-center">
+                                {% if policy.status in ['published', 'active', 'Active'] %}
+                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Active
+                                    </span>
+                                {% elif policy.status in ['suspended', 'Suspended'] %}
+                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200/60">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Suspended
+                                    </span>
+                                {% elif policy.status in ['expired', 'Expired'] %}
+                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-50 text-rose-700 border border-rose-200/60">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span> Expired
+                                    </span>
+                                {% else %}
+                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                                        {{ policy.status|title }}
+                                    </span>
+                                {% endif %}
+                            </td>
+
+                            <!-- Action Menu / Buttons -->
+                            <td class="py-3 px-4 text-right">
+                                <div class="inline-flex items-center gap-1.5 justify-end">
+                                    <a href="{{ url_for('policies.detail', policy_id=policy._id) }}" class="p-1 rounded-lg hover:bg-slate-100 text-primary transition-colors" title="View Policy Details">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                                    </a>
+
+                                    {% if current_user.role == 'admin' %}
+                                    <a href="{{ url_for('policies.edit', policy_id=policy._id) }}" class="p-1 rounded-lg hover:bg-slate-100 text-slate-600 transition-colors" title="Edit Policy">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                                    </a>
+                                    {% endif %}
+
+                                    {% if policy.status in ['published', 'active', 'Active'] %}
+                                    <button type="button" onclick="openExtendModal('{{ policy._id }}', '{{ policy.policy_number }}', '{{ policy.vehicle_reg }}', '{{ policy.insurance_company }}', '{{ policy.certificate_number or '' }}', '{{ policy.premium_amount or 0 }}')" class="p-1 rounded-lg hover:bg-emerald-50 text-emerald-600 transition-colors" title="Extend / Renew Policy">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                                    </button>
+
+                                    {% if current_user.role == 'admin' %}
+                                    <button type="button" onclick="openSuspendModal('{{ policy._id }}', '{{ policy.policy_number }}')" class="p-1 rounded-lg hover:bg-amber-50 text-amber-600 transition-colors" title="Suspend Policy">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>
+                                    </button>
+                                    {% endif %}
+                                    {% endif %}
+
+                                    {% if policy.status in ['suspended', 'Suspended'] and current_user.role == 'admin' %}
+                                    <form action="{{ url_for('policies.reactivate', policy_id=policy._id) }}" method="POST" class="inline">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="p-1 rounded-lg hover:bg-emerald-50 text-emerald-600 transition-colors" title="Reactivate Policy">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                        </button>
+                                    </form>
+                                    {% endif %}
+                                </div>
                             </td>
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="7" class="py-8 text-center text-muted">No policies found.</td>
+                            <td colspan="11" class="py-12 text-center text-muted">
+                                <p class="font-medium">No policies found matching your search criteria.</p>
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
         </div>
-    </div>
 
-    <!-- Tab Content: Available Policies -->
-    <div id="content-available" class="tab-content hidden flex flex-col gap-6">
-        <div class="flex justify-between items-center mb-2">
-            <p class="text-sm text-muted">Manage the types of insurance policies the agency can issue.</p>
-            <button onclick="openPolicyTypeModal()" class="magnetic-btn border border-primary text-primary bg-surface hover:bg-primary/5 px-4 py-2 rounded-full text-sm font-semibold shadow-sm transition-colors">
-                + Add Policy Type
-            </button>
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {% for t in policy_types %}
-            <div class="glass p-6 rounded-3xl border border-divider/60 hover:border-primary/30 transition-all flex flex-col gap-3">
-                <div class="flex justify-between items-start">
-                    <h3 class="text-xl font-display font-bold text-ink capitalize">{{ t.name }}</h3>
-                    <span class="bg-surface text-primary border border-divider px-2.5 py-1 rounded-full text-xs font-semibold">Base: KES {{ "{:,.2f}".format(t.default_premium) }}</span>
+        <!-- Mobile Stacked Card View (< 768px Fallback) -->
+        <div class="block md:hidden flex flex-col gap-3">
+            {% for policy in policies_page['items'] %}
+            <div class="glass-card p-4 rounded-2xl flex flex-col gap-3">
+                <div class="flex items-start justify-between gap-2 border-b border-divider/60 pb-2.5">
+                    <div>
+                        <a href="{{ url_for('policies.detail', policy_id=policy._id) }}" class="font-mono font-bold text-sm text-primary hover:underline">
+                            {{ policy.policy_number }}
+                        </a>
+                        <p class="text-xs font-semibold text-ink mt-0.5">{{ policy.client_name }}</p>
+                    </div>
+                    <div>
+                        {% if policy.status in ['published', 'active', 'Active'] %}
+                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60">
+                                Active
+                            </span>
+                        {% elif policy.status in ['suspended', 'Suspended'] %}
+                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200/60">
+                                Suspended
+                            </span>
+                        {% else %}
+                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                                {{ policy.status|title }}
+                            </span>
+                        {% endif %}
+                    </div>
                 </div>
-                <p class="text-sm text-muted line-clamp-3">{{ t.description }}</p>
-                <div class="mt-auto pt-4 border-t border-divider/50 flex justify-end">
-                    <form action="/policies/types/{{ t._id }}/delete" method="POST" onsubmit="return confirm('Are you sure you want to delete this policy type?');">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                        <button type="submit" class="text-xs text-red-500 hover:text-red-700 font-medium">Delete</button>
-                    </form>
+
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                        <span class="text-[10px] text-muted uppercase font-semibold block">Vehicle / PAX</span>
+                        <span class="font-mono font-bold text-ink">{{ policy.vehicle_reg or 'N/A' }} ({{ policy.pax or 4 }} PAX)</span>
+                    </div>
+                    <div>
+                        <span class="text-[10px] text-muted uppercase font-semibold block">Underwriter</span>
+                        <span class="font-medium text-ink truncate block">{{ policy.insurance_company or 'Westlake' }}</span>
+                    </div>
+                    <div>
+                        <span class="text-[10px] text-muted uppercase font-semibold block">Start Date</span>
+                        <span class="font-mono text-muted text-[11px]">{{ policy.effective_date or '—' }}</span>
+                    </div>
+                    <div>
+                        <span class="text-[10px] text-muted uppercase font-semibold block">Expiry Date</span>
+                        <span class="font-mono text-muted text-[11px]">{{ policy.expiry_date or '—' }}</span>
+                    </div>
+                </div>
+
+                <!-- Card Actions -->
+                <div class="flex items-center justify-between gap-2 pt-2 border-t border-divider/40">
+                    <div class="text-[11px] font-mono font-bold text-primary">
+                        KES {{ "{:,.0f}".format(policy.premium_amount) if policy.premium_amount is number else policy.premium_amount }}
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                        <button type="button" onclick="openExtendModal('{{ policy._id }}', '{{ policy.policy_number }}', '{{ policy.vehicle_reg }}', '{{ policy.insurance_company }}', '{{ policy.certificate_number or '' }}', '{{ policy.premium_amount or 0 }}')" class="apple-btn px-3 py-1 rounded-full text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200/60">
+                            Extend
+                        </button>
+                        <a href="{{ url_for('policies.detail', policy_id=policy._id) }}" class="apple-btn px-3.5 py-1 rounded-full text-xs font-semibold text-surface bg-primary hover:bg-primary-dark">
+                            Details
+                        </a>
+                    </div>
                 </div>
             </div>
             {% else %}
-            <div class="col-span-full glass p-8 rounded-3xl text-center">
-                <p class="text-muted">No policy types configured yet.</p>
+            <div class="glass-card p-8 rounded-2xl text-center text-muted">
+                <p>No policies found.</p>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Pagination Controls -->
+        {% if policies_page.pages > 1 %}
+        <div class="flex flex-col sm:flex-row items-center justify-between gap-3 px-2">
+            <p class="text-xs text-muted font-medium">
+                Showing page <strong class="text-ink font-semibold">{{ policies_page.page }}</strong> of {{ policies_page.pages }} ({{ policies_page.total }} policies)
+            </p>
+            <div class="flex items-center gap-1.5">
+                {% if policies_page.page > 1 %}
+                    <a href="?search={{ search_query or '' }}&category={{ category or '' }}&sort={{ sort or '' }}&page={{ policies_page.page - 1 }}&per_page={{ per_page }}" class="apple-btn px-3 py-1.5 rounded-full text-xs font-medium bg-surface border border-divider text-ink hover:bg-slate-50">Previous</a>
+                {% endif %}
+
+                {% for p in range(1, policies_page.pages + 1) %}
+                    {% if p == policies_page.page %}
+                        <span class="w-8 h-8 rounded-full text-xs font-bold bg-primary text-surface flex items-center justify-center shadow-sm">{{ p }}</span>
+                    {% elif p <= 3 or p >= policies_page.pages - 2 or (p >= policies_page.page - 1 and p <= policies_page.page + 1) %}
+                        <a href="?search={{ search_query or '' }}&category={{ category or '' }}&sort={{ sort or '' }}&page={{ p }}&per_page={{ per_page }}" class="w-8 h-8 rounded-full text-xs font-medium text-ink hover:bg-slate-100 flex items-center justify-center transition-colors">{{ p }}</a>
+                    {% endif %}
+                {% endfor %}
+
+                {% if policies_page.page < policies_page.pages %}
+                    <a href="?search={{ search_query or '' }}&category={{ category or '' }}&sort={{ sort or '' }}&page={{ policies_page.page + 1 }}&per_page={{ per_page }}" class="apple-btn px-3 py-1.5 rounded-full text-xs font-medium bg-surface border border-divider text-ink hover:bg-slate-50">Next</a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Tab 2: Available Policy Types Content -->
+    <div id="content-available" class="tab-content hidden flex flex-col gap-6">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <div>
+                <h3 class="text-lg font-display font-bold text-ink">Configured Underwriting Categories</h3>
+                <p class="text-xs text-muted">Manage available insurance coverage policies and baseline premiums.</p>
+            </div>
+            {% if current_user.role == 'admin' %}
+            <button onclick="openModal('addPolicyTypeModal')" class="apple-btn inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold text-surface bg-primary hover:bg-primary-dark shadow-sm">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                <span>Add Coverage Type</span>
+            </button>
+            {% endif %}
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {% for pt in policy_types %}
+            <div class="glass-card p-5 rounded-2xl flex flex-col justify-between gap-4">
+                <div>
+                    <div class="flex items-center justify-between">
+                        <h4 class="font-bold text-ink text-sm">{{ pt.name }}</h4>
+                        <span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-primary-50 text-primary border border-primary/20">Standard</span>
+                    </div>
+                    <p class="text-xs text-muted mt-2 leading-relaxed">{{ pt.description or 'Comprehensive underwriting coverage definition for motor and non-motor risks.' }}</p>
+                </div>
+                <div class="flex items-center justify-between pt-3 border-t border-divider/60">
+                    <div>
+                        <span class="text-[10px] text-muted block uppercase font-mono">Base Rate</span>
+                        <span class="text-sm font-bold font-mono text-ink">KES {{ "{:,.2f}".format(pt.default_premium) if pt.default_premium is number else pt.default_premium }}</span>
+                    </div>
+                    {% if current_user.role == 'admin' %}
+                    <form action="{{ url_for('policies.delete_policy_type', type_id=pt._id) }}" method="POST" onsubmit="return confirm('Are you sure you want to remove this policy type?')">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="text-xs text-rose-600 hover:text-rose-700 font-semibold px-3 py-1 rounded-lg hover:bg-rose-50 transition-colors">
+                            Delete
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
             </div>
             {% endfor %}
         </div>
     </div>
+
 </div>
 
-<!-- Add Policy Type Modal -->
-<div id="addPolicyTypeModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-ink/50 backdrop-blur-sm overflow-y-auto py-10">
-    <div class="glass rounded-3xl p-8 max-w-md w-full mx-4 shadow-xl border border-divider/60 my-auto">
-        <h2 class="text-2xl font-display font-bold text-ink mb-6">Add Policy Type</h2>
-        <form id="addPolicyTypeForm" method="POST" action="/policies/types/add" class="flex flex-col gap-4">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-            <div class="flex flex-col gap-1">
-                <label for="pt_name" class="text-xs font-semibold text-muted ml-1">Policy Name</label>
-                <input type="text" name="name" id="pt_name" required placeholder="e.g. Comprehensive" class="w-full bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary transition-all">
+<!-- Rich Modal: Policy Extension / Renewal (Frames Parity) -->
+<div id="extendPolicyModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/40 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity duration-200">
+    <div class="glass-dropdown bg-surface rounded-3xl p-6 max-w-xl w-full shadow-glass-xl border border-slate-200/80 transform scale-95 transition-transform duration-200 overflow-y-auto max-h-[90vh]">
+        <div class="flex justify-between items-center pb-3 border-b border-divider/60">
+            <div>
+                <h3 class="text-lg font-bold text-ink flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                    Policy Extension
+                </h3>
+                <p class="text-xs text-muted">Extend policy term — balance collected via cash or Paybill</p>
             </div>
-            
-            <div class="flex flex-col gap-1">
-                <label for="pt_desc" class="text-xs font-semibold text-muted ml-1">Description</label>
-                <textarea name="description" id="pt_desc" rows="3" required placeholder="Details about coverage..." class="w-full bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary transition-all resize-none"></textarea>
+            <button onclick="closeModal('extendPolicyModal')" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-muted hover:text-ink transition-colors">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+
+        <form id="extendPolicyForm" action="" method="POST" class="flex flex-col gap-3.5 mt-4">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <!-- Readonly Policy Summary Bar -->
+            <div class="p-3 rounded-xl bg-slate-100/80 border border-slate-200/70 grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+                <div>
+                    <span class="text-[10px] text-muted block uppercase font-mono">Policy #</span>
+                    <span id="ext_policy_number" class="font-mono font-bold text-primary"></span>
+                </div>
+                <div>
+                    <span class="text-[10px] text-muted block uppercase font-mono">Reg No</span>
+                    <span id="ext_reg_no" class="font-mono font-bold text-ink"></span>
+                </div>
+                <div>
+                    <span class="text-[10px] text-muted block uppercase font-mono">Underwriter</span>
+                    <span id="ext_underwriter" class="font-medium text-ink truncate block"></span>
+                </div>
             </div>
 
-            <div class="flex flex-col gap-1">
-                <label for="pt_premium" class="text-xs font-semibold text-muted ml-1">Default Base Premium (KES)</label>
-                <input type="number" name="default_premium" id="pt_premium" step="0.01" min="0" required placeholder="0.00" class="w-full bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary transition-all">
+            <!-- Certificate Number -->
+            <div>
+                <label class="block text-xs font-semibold text-ink mb-1">Certificate #</label>
+                <input type="text" id="ext_certificate" name="certificate_number" placeholder="e.g. CERT-2026-9901" class="w-full bg-slate-50 border border-divider rounded-xl px-3.5 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary font-mono">
             </div>
-            
-            <div class="flex justify-end gap-3 mt-4">
-                <button type="button" onclick="closePolicyTypeModal()" class="px-6 py-2.5 rounded-full text-muted hover:bg-surface border border-transparent hover:border-divider/50 transition-colors font-medium text-sm">Cancel</button>
-                <button type="submit" class="magnetic-btn bg-primary text-surface px-6 py-2.5 rounded-full font-medium shadow-sm text-sm">Save Type</button>
+
+            <!-- Date & Duration Row -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                    <label class="block text-xs font-semibold text-ink mb-1">Start Date *</label>
+                    <input type="date" id="ext_start_date" name="effective_date" required onchange="recalculateExpiry()" class="w-full bg-slate-50 border border-divider rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary font-mono">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-ink mb-1">Duration (Months) *</label>
+                    <select id="ext_months" name="duration_months" onchange="recalculateExpiry()" class="w-full bg-slate-50 border border-divider rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary font-mono">
+                        <option value="1">1 Month</option>
+                        <option value="3">3 Months</option>
+                        <option value="6">6 Months</option>
+                        <option value="12" selected>12 Months (1 Year)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-ink mb-1">Exp Date (Computed)</label>
+                    <input type="date" id="ext_expiry_date" name="expiry_date" required readonly class="w-full bg-slate-100 border border-divider rounded-xl px-3 py-2 text-xs font-mono text-ink">
+                </div>
+            </div>
+
+            <!-- Financial Calculation Row -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                    <label class="block text-xs font-semibold text-ink mb-1">Premium (KES) *</label>
+                    <input type="number" step="0.01" id="ext_premium" name="premium_amount" required oninput="recalculateBalance()" class="w-full bg-slate-50 border border-divider rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary font-mono">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-ink mb-1">Deposit (KES)</label>
+                    <input type="number" step="0.01" id="ext_deposit" name="deposit_amount" value="0" oninput="recalculateBalance()" class="w-full bg-slate-50 border border-divider rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary font-mono">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-ink mb-1">Balance (Computed)</label>
+                    <input type="text" id="ext_balance" name="balance_amount" readonly class="w-full bg-slate-100 border border-divider rounded-xl px-3 py-2 text-xs font-mono font-bold text-primary">
+                </div>
+            </div>
+
+            <!-- Payment Mode & Phone Row -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-divider/40">
+                <div>
+                    <label class="block text-xs font-semibold text-ink mb-1">Pay Mode</label>
+                        <select id="ext_paymode" name="pay_mode" class="w-full bg-slate-50 border border-divider rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary font-mono">
+                            <option value="PAYBILL">Paybill (C2B)</option>
+                            <option value="CASH">Cash / Bank Slip</option>
+                            <option value="CHEQUE">Bank Cheque</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-ink mb-1">Client Mobile Phone</label>
+                        <input type="text" id="ext_phone" name="phone" placeholder="07XXXXXXXX" class="w-full bg-slate-50 border border-divider rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary font-mono">
+                    </div>
+            </div>
+
+            <!-- Modal Action Footer -->
+            <div class="flex items-center justify-end gap-2.5 pt-3 border-t border-divider/60 mt-1">
+                <button type="button" onclick="closeModal('extendPolicyModal')" class="px-4 py-2 rounded-full text-xs font-semibold text-muted hover:text-ink hover:bg-slate-100 transition-all">
+                    Cancel
+                </button>
+                <button type="submit" class="px-5 py-2 rounded-full text-xs font-semibold text-surface bg-primary hover:bg-primary-dark shadow-sm transition-all">
+                    Save Extension
+                </button>
             </div>
         </form>
     </div>
 </div>
-{% endblock %}
 
-{% block scripts %}
+<!-- Modal: Suspend Policy Confirmation (Admin Only) -->
+<div id="suspendPolicyModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/40 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity duration-200">
+    <div class="glass-dropdown bg-surface rounded-3xl p-6 max-w-md w-full shadow-glass-xl border border-slate-200/80 transform scale-95 transition-transform duration-200">
+        <div class="flex items-center gap-3 pb-3 border-b border-divider/60">
+            <span class="w-10 h-10 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 border border-amber-200/60">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+            </span>
+            <div>
+                <h3 class="text-base font-bold text-ink">Suspend Policy</h3>
+                <p class="text-xs text-muted" id="suspend_policy_label"></p>
+            </div>
+        </div>
+
+        <form id="suspendPolicyForm" action="" method="POST" class="flex flex-col gap-3.5 mt-4">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div>
+                <label class="block text-xs font-semibold text-ink mb-1">Reason for Suspension *</label>
+                <textarea name="suspension_reason" required rows="3" placeholder="e.g. Non-payment of balance, client request, or underwriter recall..." class="w-full bg-slate-50 border border-divider rounded-xl p-3 text-xs focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"></textarea>
+            </div>
+
+            <div class="flex items-center justify-end gap-2.5 pt-3 border-t border-divider/60">
+                <button type="button" onclick="closeModal('suspendPolicyModal')" class="px-4 py-2 rounded-full text-xs font-semibold text-muted hover:text-ink hover:bg-slate-100 transition-all">
+                    Cancel
+                </button>
+                <button type="submit" class="px-5 py-2 rounded-full text-xs font-semibold text-surface bg-amber-600 hover:bg-amber-700 shadow-sm transition-all">
+                    Confirm Suspension
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: Add Policy Type (Admin Only) -->
+{% if current_user.role == 'admin' %}
+<div id="addPolicyTypeModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/40 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity duration-200">
+    <div class="glass-dropdown bg-surface rounded-3xl p-6 max-w-md w-full shadow-glass-xl border border-slate-200/80 transform scale-95 transition-transform duration-200">
+        <div class="flex justify-between items-center pb-3 border-b border-divider/60">
+            <div>
+                <h3 class="text-base font-bold text-ink">Add Policy Coverage Type</h3>
+                <p class="text-xs text-muted">Create a new insurance classification</p>
+            </div>
+            <button onclick="closeModal('addPolicyTypeModal')" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-muted hover:text-ink transition-colors">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+
+        <form action="{{ url_for('policies.add_policy_type') }}" method="POST" class="flex flex-col gap-3.5 mt-4">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div>
+                <label class="block text-xs font-semibold text-ink mb-1">Type Name *</label>
+                <input type="text" name="name" required placeholder="e.g. Commercial Comprehensive" class="w-full bg-slate-50 border border-divider rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+            </div>
+
+            <div>
+                <label class="block text-xs font-semibold text-ink mb-1">Description</label>
+                <textarea name="description" rows="2" placeholder="Brief coverage scope..." class="w-full bg-slate-50 border border-divider rounded-xl p-3 text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"></textarea>
+            </div>
+
+            <div>
+                <label class="block text-xs font-semibold text-ink mb-1">Baseline Premium (KES) *</label>
+                <input type="number" step="0.01" name="default_premium" required placeholder="5000" class="w-full bg-slate-50 border border-divider rounded-xl px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+            </div>
+
+            <div class="flex items-center justify-end gap-2.5 pt-3 border-t border-divider/60">
+                <button type="button" onclick="closeModal('addPolicyTypeModal')" class="px-4 py-2 rounded-full text-xs font-semibold text-muted hover:text-ink hover:bg-slate-100 transition-all">
+                    Cancel
+                </button>
+                <button type="submit" class="px-5 py-2 rounded-full text-xs font-semibold text-surface bg-primary hover:bg-primary-dark shadow-sm transition-all">
+                    Create Type
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
 <script>
-    function switchTab(tabId) {
-        const contents = document.querySelectorAll('.tab-content');
-        contents.forEach(content => content.classList.add('hidden'));
-        
-        const activeContent = document.getElementById(`content-${tabId}`);
-        if (activeContent) activeContent.classList.remove('hidden');
-        
-        const buttons = document.querySelectorAll('.tab-btn');
-        buttons.forEach(btn => {
-            btn.classList.remove('border-primary', 'text-primary');
-            btn.classList.add('border-transparent', 'text-muted');
-        });
-        
-        const activeBtn = document.getElementById(`tab-btn-${tabId}`);
-        if (activeBtn) {
-            activeBtn.classList.remove('border-transparent', 'text-muted');
-            activeBtn.classList.add('border-primary', 'text-primary');
-        }
-    }
-
-    function openPolicyTypeModal() {
-        const modal = document.getElementById('addPolicyTypeModal');
-        modal.classList.remove('hidden');
-        modal.classList.add('flex');
-    }
-
-    function closePolicyTypeModal() {
-        const modal = document.getElementById('addPolicyTypeModal');
-        modal.classList.remove('flex');
-        modal.classList.add('hidden');
-        document.getElementById('addPolicyTypeForm').reset();
-    }
-
-    // Stagger table rows
-    gsap.from("tbody tr", {
-        y: 20,
-        opacity: 0,
-        duration: 0.5,
-        stagger: 0.1,
-        ease: "power2.out",
-        delay: 0.2
+function switchTab(tabId) {
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('text-primary', 'bg-surface', 'shadow-sm');
+        btn.classList.add('text-muted');
     });
+
+    const activeContent = document.getElementById('content-' + tabId);
+    const activeBtn = document.getElementById('tab-btn-' + tabId);
+    if (activeContent && activeBtn) {
+        activeContent.classList.remove('hidden');
+        activeBtn.classList.remove('text-muted');
+        activeBtn.classList.add('text-primary', 'bg-surface', 'shadow-sm');
+    }
+}
+
+function openModal(id) {
+    const modal = document.getElementById(id);
+    if (!modal) return;
+    modal.classList.remove('opacity-0', 'pointer-events-none');
+    modal.classList.add('opacity-100', 'pointer-events-auto');
+    const inner = modal.querySelector('.glass-dropdown');
+    if (inner) {
+        inner.classList.remove('scale-95');
+        inner.classList.add('scale-100');
+    }
+}
+
+function closeModal(id) {
+    const modal = document.getElementById(id);
+    if (!modal) return;
+    modal.classList.remove('opacity-100', 'pointer-events-auto');
+    modal.classList.add('opacity-0', 'pointer-events-none');
+    const inner = modal.querySelector('.glass-dropdown');
+    if (inner) {
+        inner.classList.remove('scale-100');
+        inner.classList.add('scale-95');
+    }
+}
+
+function openExtendModal(policyId, policyNumber, regNo, underwriter, certificate, premium) {
+    const form = document.getElementById('extendPolicyForm');
+    form.action = '/policies/' + policyId + '/extend';
+    document.getElementById('ext_policy_number').innerText = policyNumber;
+    document.getElementById('ext_reg_no').innerText = regNo || 'N/A';
+    document.getElementById('ext_underwriter').innerText = underwriter || 'Westlake Underwriting';
+    document.getElementById('ext_certificate').value = certificate || '';
+    document.getElementById('ext_premium').value = premium || 0;
+
+    // Set default start date to today
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('ext_start_date').value = today;
+
+    recalculateExpiry();
+    recalculateBalance();
+    openModal('extendPolicyModal');
+}
+
+function openSuspendModal(policyId, policyNumber) {
+    const form = document.getElementById('suspendPolicyForm');
+    form.action = '/policies/' + policyId + '/suspend';
+    document.getElementById('suspend_policy_label').innerText = 'Confirm suspension of Policy ' + policyNumber;
+    openModal('suspendPolicyModal');
+}
+
+function recalculateExpiry() {
+    const startVal = document.getElementById('ext_start_date').value;
+    const months = parseInt(document.getElementById('ext_months').value || '12', 10);
+    if (!startVal) return;
+    const dt = new Date(startVal);
+    dt.setMonth(dt.getMonth() + months);
+    document.getElementById('ext_expiry_date').value = dt.toISOString().split('T')[0];
+}
+
+function recalculateBalance() {
+    const premium = parseFloat(document.getElementById('ext_premium').value || '0');
+    const deposit = parseFloat(document.getElementById('ext_deposit').value || '0');
+    const balance = Math.max(0, premium - deposit);
+    document.getElementById('ext_balance').value = 'KES ' + balance.toLocaleString('en-US', {minimumFractionDigits: 2});
+}
+
 </script>
+
 {% endblock %}

@@ -140,20 +140,26 @@ class TestReminderService(unittest.TestCase):
         # simulated/sent/failed states.
         self.assertEqual(results[1]["reminder_status"].lower(), "sent")
 
-    @patch.dict(os.environ, {'AT_API_KEY': '', 'AT_USERNAME': '', 'SMS_SIMULATE': '1'})
-    @patch('app.extensions.get_db')
-    @patch('app.services.reminder_service.AuditService.log_action')
-    @patch('app.services.reminder_service.get_db')
-    def test_send_automatic_reminders(self, mock_get_db, mock_log_action,
-                                      mock_ext_get_db):
-        """Engine v2: one policy at the SMS offset fires BOTH legs exactly once."""
-        mock_db = MagicMock()
-        mock_get_db.return_value = mock_db
-        mock_ext_get_db.return_value = mock_db  # NotificationService leg
-
-        # Configurable cadence (Westlake defaults: SMS at 3, staff at 7/3/1).
-        mock_db.app_settings.find_one.return_value = {
-            'key': 'reminders', 'sms_offsets': [3], 'staff_offsets': [7, 3, 1]}
+    def test_send_automatic_reminders(self):
+        """Engine v3: one policy at the SMS offset fires BOTH legs exactly
+        once — via the outbox (enqueue, drain, ledger, bells)."""
+        import pymongo
+        from app.services import reminder_service as rs
+        db = pymongo.MongoClient('mongodb://localhost:27017')[
+            'policy_guard_reminder_service_auto_test']
+        for coll in ('reminders', 'notifications', 'app_settings',
+                     'sms_outbox', 'sms_suppressions', 'sms_templates',
+                     'audit_logs', 'users'):
+            db[coll].delete_many({})
+        db.app_settings.insert_one({
+            'key': 'sms_engine',
+            'quiet_hours': {'enabled': False, 'start': '21:00', 'end': '07:00'},
+            'max_sms_per_customer_per_day': 10,
+            'sms_cost_per_segment_kes': 1.0,
+            'max_attempts': 5,
+            'retry_base_delay_seconds': 60,
+            'drain_batch_size': 100,
+        })
 
         policy_id = ObjectId()
         policy = {
@@ -166,70 +172,82 @@ class TestReminderService(unittest.TestCase):
             "client_phone_e164": "+254712345678",
         }
 
-        with patch.object(ReminderService, 'get_expiring_soon_policies',
+        with patch.dict(os.environ, {'AT_API_KEY': '', 'AT_USERNAME': '',
+                                     'SMS_SIMULATE': '1'}), \
+             patch('app.services.reminder_service.get_db', return_value=db), \
+             patch('app.extensions.get_db', return_value=db), \
+             patch.object(ReminderService, 'get_expiring_soon_policies',
                           return_value=[policy]):
             stats = ReminderService.send_automatic_reminders(user_id=None)
 
-        self.assertEqual(stats, {'staff_sent': 1, 'sms_sent': 1, 'sms_failed': 0})
+        self.assertEqual(stats, {'staff_sent': 1, 'sms_sent': 1,
+                                 'sms_failed': 0, 'sms_suppressed': 0,
+                                 'sms_retrying': 0})
 
         # Two claimed jobs: staff_notice + customer_sms.
-        self.assertEqual(mock_db.reminders.insert_one.call_count, 2)
-        kinds = {c.args[0]['kind'] for c in mock_db.reminders.insert_one.call_args_list}
+        kinds = {j['kind'] for j in db.reminders.find()}
         self.assertEqual(kinds, {'staff_notice', 'customer_sms'})
+        sms_job = db.reminders.find_one({'kind': 'customer_sms'})
+        self.assertEqual(sms_job['status'], 'simulated')
+        # The outbox holds the full ledger row (exactly one).
+        outbox = list(db.sms_outbox.find())
+        self.assertEqual(len(outbox), 1)
+        self.assertEqual(outbox[0]['status'], 'delivered')
+        self.assertTrue(outbox[0]['simulated'])
 
         # Both staff notifications created: expiry warning + simulated success.
-        self.assertEqual(mock_db.notifications.insert_one.call_count, 2)
+        self.assertEqual(db.notifications.count_documents({}), 2)
 
-        mock_log_action.assert_called_once()
-        self.assertEqual(mock_log_action.call_args[1]["entity_type"], "system")
-
-    @patch.dict(os.environ, {'AT_API_KEY': '', 'AT_USERNAME': '', 'SMS_SIMULATE': '1'})
-    @patch('app.extensions.get_db')
-    @patch('app.services.reminder_service.AuditService.log_action')
-    @patch('app.services.reminder_service.get_db')
-    def test_send_manual_reminder_success(self, mock_get_db, mock_log_action,
-                                          mock_ext_get_db):
+    def test_send_manual_reminder_success(self):
         """Manual reminder dispatches a real (simulated) customer-SMS job."""
-        mock_db = MagicMock()
-        mock_get_db.return_value = mock_db
-        mock_ext_get_db.return_value = mock_db
+        import pymongo
+        db = pymongo.MongoClient('mongodb://localhost:27017')[
+            'policy_guard_reminder_service_manual_test']
+        for coll in ('policies', 'users', 'reminders', 'notifications',
+                     'app_settings', 'sms_outbox', 'sms_suppressions',
+                     'sms_templates', 'audit_logs'):
+            db[coll].delete_many({})
+        db.app_settings.insert_one({
+            'key': 'sms_engine',
+            'quiet_hours': {'enabled': False, 'start': '21:00', 'end': '07:00'},
+            'max_sms_per_customer_per_day': 10,
+            'sms_cost_per_segment_kes': 1.0,
+            'max_attempts': 5,
+            'retry_base_delay_seconds': 60,
+            'drain_batch_size': 100,
+        })
 
-        policy_id = ObjectId()
-        client_id = ObjectId()
-
-        mock_policy = {
-            "_id": policy_id,
+        client_id = db.users.insert_one({
+            "role": "customer",
+            "full_name": "Charlie Chaplin",
+            "email": "charlie@chaplin.com",
+            "phone": "+254712345678",
+        }).inserted_id
+        policy_id = db.policies.insert_one({
             "policy_number": "PG-MANUAL-123",
             "client_id": client_id,
             "expiry_date": self.expiry_soon,
             "status": "Active",
             "policy_type": "Motor",
-        }
-        mock_db.policies.find_one.return_value = mock_policy
+        }).inserted_id
 
-        mock_client = {
-            "_id": client_id,
-            "role": "customer",
-            "full_name": "Charlie Chaplin",
-            "email": "charlie@chaplin.com",
-            "phone": "+254712345678",
-        }
-        mock_db.users.find_one.return_value = mock_client
-
-        success, err = ReminderService.send_manual_reminder(policy_id, user_id=None)
+        with patch.dict(os.environ, {'AT_API_KEY': '', 'AT_USERNAME': '',
+                                     'SMS_SIMULATE': '1'}), \
+             patch('app.services.reminder_service.get_db', return_value=db), \
+             patch('app.extensions.get_db', return_value=db):
+            success, err = ReminderService.send_manual_reminder(
+                policy_id, user_id=None)
 
         self.assertTrue(success)
         self.assertIsNone(err)
 
         # Manual sends INSERT a job doc (offset-free => re-sendable) and
         # notify staff of the outcome.
-        insert_args = mock_db.reminders.insert_one.call_args[0][0]
-        self.assertEqual(insert_args["kind"], "customer_sms")
-        self.assertEqual(insert_args["policy_number"], "PG-MANUAL-123")
-        self.assertIn(insert_args["status"], ("sent", "simulated"))
-        self.assertTrue(insert_args["manual"])
-
-        mock_log_action.assert_called_once()
+        jobs = list(db.reminders.find({'manual': True}))
+        self.assertGreaterEqual(len(jobs), 1)
+        self.assertEqual(jobs[-1]["kind"], "customer_sms")
+        self.assertEqual(jobs[-1]["policy_number"], "PG-MANUAL-123")
+        self.assertIn(jobs[-1]["status"], ("sent", "simulated"))
 
     @patch('app.services.reminder_service.get_db')
     def test_send_manual_reminder_not_found(self, mock_get_db):

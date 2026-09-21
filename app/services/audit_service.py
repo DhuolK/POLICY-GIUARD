@@ -1,30 +1,37 @@
 import datetime
+import logging
 from bson import ObjectId
 from app.extensions import get_db
 
+logger = logging.getLogger(__name__)
+
 class AuditService:
     @staticmethod
-    def log_action(entity_type, entity_id, action, performed_by, details=None, session=None):
+    def log_action(entity_type=None, entity_id=None, action=None, performed_by=None, details=None, session=None, user_id=None, target_type=None, target_id=None):
         """
         Logs a user action / state transition on an entity into the audit_logs collection.
+        Supports both positional and keyword arguments.
         """
         db = get_db()
-        
+
+        actual_entity_type = entity_type or target_type or "system"
+        actual_entity_id = entity_id or target_id or "system"
+        actual_performer = performed_by or user_id or "system"
+
         log_entry = {
-            "entity_type": entity_type, # 'policy', 'claim', etc.
-            "entity_id": ObjectId(entity_id) if isinstance(entity_id, str) and ObjectId.is_valid(entity_id) else entity_id,
-            "action": action, # 'create', 'update', 'status_change', 'approve', 'reject'
-            "performed_by": ObjectId(performed_by) if isinstance(performed_by, str) and ObjectId.is_valid(performed_by) else performed_by,
-            "details": details or {}, # e.g. {"from_status": "draft", "to_status": "pending_review"}
-            "timestamp": datetime.datetime.utcnow()
+            "entity_type": actual_entity_type,
+            "entity_id": ObjectId(actual_entity_id) if isinstance(actual_entity_id, str) and ObjectId.is_valid(actual_entity_id) else actual_entity_id,
+            "action": action,
+            "performed_by": ObjectId(actual_performer) if isinstance(actual_performer, str) and ObjectId.is_valid(actual_performer) else actual_performer,
+            "details": details or {},
+            "timestamp": datetime.datetime.now(datetime.timezone.utc)
         }
-        
+
         try:
             db.audit_logs.insert_one(log_entry, session=session)
             return True
         except Exception as e:
-            # We print and fail-safe so system doesn't crash on logging issues
-            print(f"Failed to write audit log: {e}")
+            logger.error(f"Failed to write audit log: {e}", exc_info=True)
             return False
 
     @staticmethod

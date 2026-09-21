@@ -1,0 +1,360 @@
+  KABARAK     UNIVERSITY
+
+
+
+    
+        
+        DEPARTMENT OF COMPUTER SCIENCE & IT
+
+
+
+
+           INSERT YOUR PROJECT TITLE HERE
+
+
+
+   
+           INSERT YOUR NAME HERE (Title Case)
+
+
+
+
+
+
+
+
+ A project/Proposal submitted in partial fulfillment for the requirement of the award of Bachelor of (insert degree name) Degree of Kabarak University.
+
+
+
+
+
+
+
+
+
+                                  Insert month and year of submission here
+
+
+
+
+
+1.0 INTRODUCTION TO THIS GUIDE
+The project is a partial fulfilment of the Bachelor of Computer Science (CS), Information Technology (INTE), Business Information Technology (BBIT), Computer security and Forensic (BSCSF) and Management Information Technology (BMIT) degrees offered in the department of Computer Science and Information Technology (CS/IT) of Kabarak University. The students are expected to write a well-articulated proposal and project implementation in chapter format. The proposal will be undertaken during the first semester of 4th year and implementation will be done in the subsequent semester for those students that succeed at the proposal stage. This guideline will therefore guide students on how to go about the various stages of project proposal and implementation. 
+
+2.0. OBJECTIVES OF THIS GUIDE
+The objectives of the undergraduate project/proposal are summarized as follows:
+(a) To provide students with the opportunity to integrate the knowledge and skills developed in their various programs;
+(b) To provide students with the independent study and to develop the ability to organize work with a view to achieve specific goal and
+(c) To undertake an academic project based on sound Technology, Business and Innovation Management principles and intellectual reasoning.
+
+3.0. THE PROJECT PROCESS
+The project process outlines the steps and activities involved in executing a project from start to finish, it involves several structured steps to ensure successful completion. Here’s is a summary /breakdown of the project process tailored specifically for a computer science/IT project: Project Selection and Initiation, Defining Project Scope and Objectives, Feasibility Study, Detailed Project Plan, Literature Review, research methodology, Design and Development and Testing
+4.0. PROJECT DOCUMENT
+Upon the supervisors’ approval of the detailed project proposal and implementation, students should proceed to prepare their project documentation under the supervisor’s guidance; the document should:
+(a) Use appropriate tense to clearly convey the timing and progression of activities.
+(b) Have a minimum of 25 and maximum of 50 pages of the main document.
+(c) Use the standard paper size (typically A4 or letter size) for the document.
+(d) Set margins uniformly to normal to ensure adequate white space.
+(e)  Use a readable font Times New Roman for the document
+(f)  Font size should be 12 points for the main text.
+(g) Use bold or italics sparingly for emphasis.
+(h) Use 1.5 line spacing for the main text.
+(i) Single spacing can be used for items such as table captions, footnotes, and references,
+(j) Use clear and consistent heading hierarchy (e.g., Heading 1 for main sections, Heading 2 for subsections).
+(k) Each chapter to start on a new page.
+
+5.0. PROJECT PAPER ORGANIZATION
+The Project paper should consist of three main parts;
+(a) The preliminary pages or front end
+This includes elements such as the title page, dedication, abstracts in, acknowledgements, declaration form, table of contents, list of tables, figures, algorithms and abbreviations in the order of
+(i) The title page
+(ii) The declaration page
+(iii) Recommendation page
+(iv) Copy right  page
+(v) Acknowledgement page
+(vi) Dedication page
+(vii) The abstract
+(viii) Table of contents
+The pagination of the preliminary pages should be roman numerals. The title page
+should however not be numbered.
+(b) The text or main body, usually divided into parts – chapters and sections
+(c) The supplementary pages or back end.
+? The supplementary pages consist of references and appendices or annexes.
+Proposals should extend to Chapter Three (Introduction, literature review Methodology) while a project has Four chapters that includes an additional chapter Four:  System Design and Implementation. 
+
+5.1. PROJECT PAPER SECTIONS
+5.1.1 TITLE PAGE
+* Should have the correct title, student details, and the degree programs
+* The title should be brief but comprehensive enough to convey the main theme of the project.
+* The title should incorporate relevant keywords that highlight the core concepts and scope of your project.
+* Ensure the title accurately represents the content and objectives of the project.
+* Avoid using jargon or overly technical terms unless they are central to the topic.
+* The title should not be vague or ambiguous.
+* It should clearly communicate the main idea without leaving room for misinterpretation.
+5.1.2 DECLARATION PAGE
+* The page contains the student’s declaration of the originality of the Project Report.
+* This declaration page must be signed by the student.
+* The declaration page is to follow the format and content as shown in Appendix B
+5.1.3 DEDICATION PAGE 
+Students may include an optional dedication for the Project Report. The dedication must be brief, not more than one paragraph and must not contain any number, chart or photograph. Refer to sample in Appendix C
+5.1.4 ACKNOWLEDGEMENT PAGE 
+Here you have the opportunity to thank the various people who have helped in the development of the project. It might include specific individuals who have given information, offered insights, or generally been supportive. Gratitude may be expressed to groups of people, like those who were studied, or fellow students.
+5.1.5 TABLE OF CONTENT
+Table of content identifies the contents and organization of document. It is made up of:
+* Section headings
+* Page numbers 
+* The rubric should be in title case and single spaced.
+* The chapter titles should be in caps and bold
+* The table of contents should be organized to match the headings and subheadings and page numbers up to maximum three (3) levels.
+* The table of content SHOULD	BE GENERATED using the respective word processor automatically.
+
+5.1.6 LIST OF TABLES
+Section consists of list of the table used in the report, indicating table no, its title and page number found.
+
+5.1.7   LIST OF FIGURES / ILLUSTRATIONS
+* The figures may include graphs, photographic illustrations, maps and drawings. 
+* These should be labeled as per serializations without including the Chapters in which they are found e.g. the first figure in chapter one should be labeled as Figure 1 and if the next Figure is in Chapter Three it should be labeled Figure 2 and so on)
+      5.1.8   ABSTRACT
+o A brief summary of the project (around 150-250 words), it Include objectives, methods used, key findings, and conclusions
+o Line spacing – 1.0
+o One block paragraph
+o Include keywords at the end in ascending order
+
+
+
+5.2 DOCUMENT CHAPTERS
+* Learners should read the sections carefully to understand and implement every instruction to the latter.  
+* Utilize chapter one: Introduction, two and three for the project proposal and chapter four for project implementation and Deployment, Chapter 5: Conclusion, Recommendations and future work
+CHAPTER ONE
+Should be between a Minimum of 2 pages and Maximum of 3 pages and consist of the following sections
+
+                                          CHAPTER ONE
+                                              Introduction
+1.1 Introduction
+Introduction of the chapter. The introduction statement for Chapter one in a research project sets the foundation for the entire document. It should establish the context, introduce the main topic, outline the objectives, and explain the significance of the study.
+e.g This chapter presents the foundation of the study, outlining the background and context of the project, the problem it addresses, and the purpose of the work. It begins with a general overview of the field, highlighting recent advancements and relevant challenges that motivate the project. Next, it defines the specific problem the project aims to solve, followed by the project’s objectives and proposed solutions. Additionally, this chapter introduces the core modules of the project and their functions, clarifying how each component will contribute to addressing the problem. The significance of the project, its scope, and limitations are also discussed, providing a clear boundary and focus for the work. Overall, Chapter One establishes the rationale for the project and sets the stage for the subsequent chapters by presenting the key questions and objectives guiding the project.
+1.2 Background of the Study
+Should be a minimum of ½ pages and maximum of 1 page
+It should consist of detailed background information about the project/ study area and about the client. It should be clear on what business the client is involved in relation to the researcher’s area of study, and how operations are currently shepherded.
+1.3 Problem Statement
+This section is consisted of the problems the researcher/study intends to address. The problem should be clearly stated in the light of the project research and its contribution to the solution. Preferably, the problem should originate from the background of the study (how operations are currently handled). each problem should give a brief explanation of how the problem is initiated by the current organization operations or functions. 
+1.4 Objectives: 
+* Clear, concise “SMART” (Specific, Measurable, Achievable, Relevant, Time-bound) objectives should be provided including project/ research and system development related objectives.
+* (S - Specific, M - Measurable, A - Achievable, R- Realistic/Relevant, T- Time bound).
+1.4.1 Main objective 
+Objectives section consists of one general objective and should reflect the topic
+e.g 
+The main objective of this project is to develop a lightweight and efficient image recognition application suitable for deployment on mobile devices, enhancing the user experience through real-time processing and minimal resource usage.
+1.4.2 Specific objectives [refine]
+Use four specific objectives numbered using roman numbers.  Start your objectives with strong action verbs that describe observable behaviours or outcomes, examples of action verbs include Investigate, measure, determine, develop, design, deploy and analyze should be used to list objectives, these objectives should be hierarchical.
+Ensure that each objective directly contributes to achieving the overall goals of your project or study.
+E.g. 
+(i) To Investigate the limitations of existing image recognition models when deployed on mobile platforms, focusing on computational and memory constraints.
+(ii) To Develop a lightweight convolutional neural network (CNN) architecture optimized for performance on mobile devices, utilizing techniques such as model pruning and quantization.
+(iii) To validate/test/verify the performance of the developed model by comparing it to standard image recognition models in terms of accuracy, speed, and resource consumption on various mobile devices.
+(iv) To Deploy the optimized image recognition application on selected mobile platforms and evaluate user feedback to assess usability and effectiveness in real-world scenarios.
+1.5 Research questions 
+* Well-articulated research questions to be derived from the research objectives. Should be equivalent to the number of specific objectives i.e.  matching 1:1 
+* Frame your research questions as interrogative sentences (beginning with words like "What," "How," "Why," etc.) to clearly pose the inquiry.
+* Ensure your research questions are manageable within the scope of your study, considering time, resources, and access to data or participants.
+1.6 Significance of the study
+* The significance of a study refers to its importance, relevance, and potential impact. It answers the question of why the research is valuable and why it matters
+* Student should justify their project by indicating the interestingness and challenge that the project presents, the timeliness of the idea, the possible advantages that	 realization of such a project would bring.
+
+1.7 Scope and Limitation of the Study
+Defining the scope and limitations of a study is crucial to provide clarity on what the research will cover and what it will not cover. The scope should address, Research Boundaries, Timeframe, Geographical Scope among others
+1.8    Proposed modules
+The Project Modules section details each module of your system, including its purpose, functionality, and how it contributes to the overall project objectives. Here’s an example breakdown with common modules like User Registration and authentication module and Profile module.
+ Module 1: User Registration and Authentication
+This module will manage the creation of user accounts, login, and authentication processes. It will include:
+* Registration: Allows users to create an account by providing personal details like name, email, password, etc.
+* Authentication: Ensures secure login by implementing password encryption and session management.
+* Password Recovery: Enables users to reset their passwords securely if they forget them.
+Technology: This module will use secure authentication frameworks such as OAuth or JWT for session management and user verification.
+Module 2: Profile Management
+This module allows users to view, edit, and update their personal information and settings. It will include:
+* Profile Update: Enables users to change details such as their contact information and preferences.
+* Privacy Settings: Provides options for users to manage visibility and security settings.
+* Role Management (if applicable): Differentiates between various types of users, such as admin, customer, and guest.
+Technology: The profile data will be stored in a relational database, ensuring data integrity and quick access.
+                                        	CHAPTER TWO
+                                      LITERATURE REVIEW
+* It should have a minimum 5 pages and maximum 10 pages
+* The literature review should not be just a compilation or reproduction of the works of others. It requires the student to examine and comment critically on the literature relevant to the student’s project area or area of research.
+* Its content should be as follows 
+2.1 Introduction 
+This section includes
+* A topic sentence that states the broad topic of your project 
+* The following sentence should state what is to be included/excluded 
+* Final sentence that signals list of key topics that will be used to discuss the selected sources
+Example
+In this chapter, a comprehensive review of the existing literature and relevant research is presented to establish the foundation for the current project. The chapter begins by exploring the theoretical frameworks and methodologies that underpin the project’s focus area, particularly in relation to the problem statement identified in Chapter One. It examines key concepts, trends, and advancements within the field of computer science that inform the development of the proposed solutions.
+Furthermore, this chapter analyzes previous studies and projects that have addressed similar challenges, highlighting their methodologies, findings, and limitations. By critically evaluating these works, the chapter aims to identify gaps in the existing literature that the current project seeks to fill. Additionally, it discusses the relevance of various technologies, tools, and approaches that may be applicable to the project’s objectives. Overall, Chapter Two provides a contextual backdrop for the project, demonstrating its significance within the broader landscape of research and development in computer science.
+2.2 Review of objective one 
+2.3 Review of objective two and so on ….
+2.4 Concept map/Conceptual diagram
+A Diagram to show the independent and dependent variables of your system from the literature review gap, the diagram should contain the key concepts, relationships and a diagram as follows:
+* Key Concepts: Identify and define key concepts derived from the relevant theories. These might include specific technical terms, methodologies, or metrics pertinent to your study.
+* Relationships: Illustrate how these concepts interrelate and how they contribute to your research. For example, if you are developing a web application, discuss how software engineering principles, usability concepts, and security measures integrate within your project.
+* Diagram: Consider including a conceptual diagram that visually represents the relationships between the theories, concepts, and your research. This could be a flowchart, a Venn diagram, or another visual tool that helps clarify the framework.
+
+
+
+
+
+
+
+
+
+
+CHAPTER THREE
+METHODOLOGY
+* This is a minimum of 4 and Maximum of 5 pages.
+3.1 Introduction 
+* Provide an outline of the contents of the chapter
+Example.
+This chapter outlines the methodology employed in the project to address the problem defined in Chapter One and achieve the outlined objectives. The methodology section is essential as it provides a detailed explanation of the approaches and techniques used in the development and implementation of the project. The chapter begins by discussing the overall research design, including whether it adopts a qualitative, quantitative, or mixed-methods approach. It then describes the specific techniques for data collection, including any tools, surveys, or experiments utilized to gather relevant information. Additionally, the selection criteria for the participants or data sources will be detailed to ensure transparency and reproducibility.
+3.2 Research methodology/Research design used. 
+Introduce the type of research methodology/research design to be used with respect to the research area of the study.
+Emphasis on Major research methodology such as Quantitative / Qualitative or mixed methods 
+3.2.1 Development Methodology (for software projects)
+* Development Approach:
+o Specify the software development methodology you will follow (e.g., Agile, Devops, MLOps etc).
+o Justify your choice based on project requirements, size, and expected outcomes.
+
+* Iterative Processes:
+o Detail how you will divide development into phases or iterations.
+o Explain how each iteration contributes to achieving project milestones and deliverables.
+3.3 Data collection methods used (To be used only for projects where data will be collected). 
+* Describe the tools used for data collection with respect to the research area of the study.
+* Use of secondary data is recommended, given project timelines
+3.4 System analysis and design (SAD)
+System analysis and design (SAD) is a critical phase in the development of the project, It involves understanding and specifying in detail what a system should do and how the components of the system should be implemented and interact with each other. Here’s an overview of how to approach system analysis and design in a project:
+3.4.1 System Analysis
+System Analysis" typically refers to the structured process of examining and defining the requirements and functionalities of a system. This phase is crucial as it lays the foundation for designing and developing a solution that meets the stakeholders' needs effectively.
+Requirements Gathering
+* Interviews: Conduct interviews with stakeholders to understand their needs and expectations.
+* Surveys and Questionnaires: Use these tools to collect data from a larger audience.
+* Observation: Observe current systems in use to identify pain points and areas for improvement.
+* Document Analysis: Review existing documentation, manuals, and reports to gather requirements.
+Requirements Analysis
+* Functional Requirements: Define what the system should do (e.g., processes, data handling, user interactions).
+* Non-Functional Requirements: Define how the system should perform (e.g., performance, security, usability).
+* Use Cases: Develop use cases to describe interactions between users and the system.
+* User Stories: Write user stories to capture specific functionalities from the end-user perspective.
+ Feasibility Study
+* Technical Feasibility: Assess whether the technology needed for the project is available and practical.
+* Economic Feasibility: Evaluate the cost-effectiveness of the project.
+* Operational Feasibility: Determine if the proposed system will operate within the current organizational environment.
+System Modeling
+* Data Flow Diagrams (DFDs): Visualize the flow of information within the system.
+* Entity-Relationship Diagrams (ERDs): Model the data relationships within the system.
+* Unified Modeling Language (UML): Use UML diagrams like class diagrams, sequence diagrams, and activity diagrams to model the system’s structure and behavior.
+3.4.2 System Design
+System Design section follows the system analysis phase and focuses on detailing how the system will be structured and implemented based on the requirements.
+Architectural Design
+* System Architecture: Define the overall architecture of the system, including hardware, software, and network components.
+* Layered Architecture: Use layered design (e.g., presentation layer, business logic layer, data access layer) to organize the system.
+Detailed Design
+* Component Design: Break down the system into smaller components or modules and specify their interactions.
+* Database Design: Design the database schema, including tables, relationships, indexes, and constraints.
+* User Interface Design:
+Outline the approach to designing the user interface (UI).
+Include wireframes or mockups to illustrate the UI layout and user interactions.
+* Algorithm Design (if applicable):
+Detail any algorithms or computational methods that will be implemented in the system.
+Provide pseudocode or flowcharts to explain the logic behind these algorithms
+ Prototyping
+* Low-Fidelity Prototypes: Create sketches or wireframes to represent the user interface and workflow.
+* High-Fidelity Prototypes: Develop interactive prototypes to provide a more realistic user experience.
+Design Specification
+* Technical Specifications: Document the technical details of the system design, including hardware and software requirements.
+* Design Documents: Create comprehensive design documents that include diagrams, descriptions, and explanations of the system’s components and their interactions.
+ Review and Validation
+* Design Review: Conduct design reviews with stakeholders to ensure the design meets the requirements.
+* Validation: Validate the design against the requirements to ensure completeness and correctness.
+3.5 Research Ethics
+* Demonstrate how you will observe ethical issues related to researching human subjects/participants e.g confidentiality, anonymity, soliciting informed consents. 
+
+
+
+                                 CHAPTER FOUR
+  SYSTEM IMPLEMENTATION AND DEPLOYMENT   
+* This chapter describes the coding, testing and deployment of the project; this marks the beginning of the SOLUTION domain
+* This chapter is made up of the following content;
+
+4.1. Introduction 
+Chapter introduction
+4.2 Development Environment Setup
+* Software Tools and Environments:
+o List the specific programming languages, development frameworks, and tools you used (e.g., Python, Java, Django, React).
+o Justify why the tools were selected and how they align with the project requirements.
+* Development Environment Configuration:
+o Describe how you set up your development environment (e.g., IDE setup, version control using Git)
+o Mention any additional tools or libraries you plan to integrate for development efficiency (e.g., Docker for containerization).
+4.3   Implementation Steps
+* Step-by-Step Implementation Plan:
+o Break down the implementation process into manageable tasks or modules.
+o Provide a timeline with milestones for completing each phase of development 
+* frontend development
+* Backend development.
+(To effectively illustrate the development process and enhance the understanding of key concepts, student MUST include various screenshots and visual aids)
+* Coding Standards and Practices:
+o Define coding standards and best practices you adhered to (e.g., clean code principles, code review process).
+o Explain how you ensured code quality and consistency throughout the project.
+4.4 Testing and Quality Assurance
+* Testing Strategy:
+o Describe your approach to testing including unit testing, integration testing, and system testing.
+o Specify testing frameworks and tools you used (e.g., JUnit for Java, pytest for Python) among others
+* Quality Assurance (QA):
+o Detail how you will ensure the system meets functional and non-functional requirements.
+o Include plans for QA reviews, test automation, and bug tracking (e.g., using issue trackers like Jira or GitLab Issues).
+4.5 Deployment Plan
+* Deployment Strategy:
+o Outline the strategy for deploying the system into a production-like environment (e.g. cloud platform like AWS, Azure, local server etc.)
+o Specify deployment scripts or automation tools you used (e.g., Ansible, Docker Compose) for consistent deployments.
+* Data Migration and Configuration (optional)
+o Plan for migrating any necessary data from development to production.
+o Document configuration steps for servers, databases, and application settings in the deployment environment.
+4.6 Go-Live Plan
+* Transition to Production:
+o Detail the steps and timeline for transitioning the system from development to production.
+o Include procedures for backup, rollback, and disaster recovery planning.
+* Post-Deployment Monitoring:
+o Describe how you will monitor the system post-deployment for performance, errors, and user feedback.
+o Set up monitoring tools and define metrics for evaluating system health and user satisfaction.
+4.7. Maintenance and Support
+* Maintenance Plan:
+o Outline your plan for ongoing maintenance activities such as updates, patches, and enhancements.
+o Define roles and responsibilities for maintenance tasks within your team or project group.
+* User Support:
+o Establish a support system for addressing user inquiries, issues, and feedback.
+o Provide documentation and resources for users to troubleshoot common problems.
+4.8 Conclusion and Future work
+The conclusion and future work section encapsulates the outcomes and implications of this undergraduate project. Through systematic research and development efforts, the project has achieved [state key achievements]. These findings contribute to [highlight significance], demonstrating the project's impact on [mention relevant fields or applications]. Looking ahead, potential future work includes [suggest potential future extensions or research opportunities], which could further enhance [describe potential impacts]. This section concludes by reaffirming the project's contributions to advancing knowledge in the field and its potential to inspire continued exploration and innovation in [specific area or domain].
+REFERENCE
+* This is a minimum of 1 page and Maximum of 2 pages.
+* References are the detailed description of resources from which information or ideas were obtained in preparing the Project Report. The details of every reference cited in the text, published or unpublished, must be listed alphabetically in this page.
+* The APA system of referencing should be used
+
+Example
+
+REFERENCES 
+
+A, R. A., & V, K. R. (2012). Data Mining: An effective tool for yield estimation in the agricultural sector. International Journal of Emerging Trends & Technology in Computer Science (IJETTCS), 1(2), 75-79.
+Albahar, M. A. (2015). Aspect Oriented Software Engineering. International Journal of Engineering, Management & Sciences (IJEMS), 2(4), 29-31.
+Armstrong, L. L. (2016). R.E.A.L. Therapy: Rational Emotive Attachment–Based Logotherapy for Families. The Family Journal: Counseling and Therapy for Couples and Families, 24(2), 164-173.
+Government of the United Kingdom. (1983). The mental health Act 1983. London: Government of the United Kingdom.
+
+
+Appendices
+Appendix 1: Budget 
+Appendix II: Data collection tools 
+Appendix III: Project schedule
+As members of Kabarak University family, we purpose at all times and in all places, to set apart in one’s heart,
+ Jesus as Lord. (1 Peter 3:15) 
+Kabarak University is ISO 9001:2015 Certified
+
+
+

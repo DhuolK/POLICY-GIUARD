@@ -1,8 +1,10 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request, current_app, session
 from flask_login import login_user, logout_user, login_required, current_user
+from ..extensions import limiter
 from ..services.auth_service import AuthService
 from ..services.audit_service import AuditService
 from ..models.user import User
+from ..utils.throttling import login_throttle_breach
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -18,6 +20,15 @@ def _is_safe_next(target):
 
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
+@limiter.limit(
+    lambda: current_app.config.get('LOGIN_RATE_LIMIT', '10 per 5 minutes'),
+    methods=['POST'],
+    # Only *failed* attempts consume budget (a failed sign-in re-renders the
+    # page with 200; success redirects). So a shared office IP can log in all
+    # day, while a password-spraying script runs out of attempts fast.
+    deduct_when=lambda response: response.status_code == 200,
+    on_breach=login_throttle_breach,
+)
 def login():
     if current_user.is_authenticated:
         return redirect(url_for('dashboard.index'))

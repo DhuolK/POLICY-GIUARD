@@ -253,8 +253,8 @@
                 <div class="bg-surface rounded-2xl p-4 border border-divider flex flex-col justify-between hover:shadow-md transition-shadow">
                     {% if proof.file_type == 'image' %}
                     <div class="relative group rounded-xl overflow-hidden mb-3 bg-slate-900/5 aspect-video flex items-center justify-center">
-                        <img src="{{ url_for('static', filename=proof.relative_path) }}" alt="{{ proof.original_filename }}" class="object-cover w-full h-full">
-                        <a href="{{ url_for('static', filename=proof.relative_path) }}" target="_blank" class="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white font-medium text-xs transition-opacity gap-1">
+                        <img src="{{ url_for('claims.get_claim_document', claim_id=claim._id, filename=proof.stored_filename or proof.relative_path.split('/')[-1]) }}" alt="{{ proof.original_filename }}" class="object-cover w-full h-full">
+                        <a href="{{ url_for('claims.get_claim_document', claim_id=claim._id, filename=proof.stored_filename or proof.relative_path.split('/')[-1]) }}" target="_blank" class="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white font-medium text-xs transition-opacity gap-1">
                             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
                             View Full Photo
                         </a>
@@ -274,10 +274,10 @@
                         </div>
                     </div>
                     {% endif %}
-                    
+
                     <div class="flex items-center justify-between pt-2 border-t border-divider/40 text-xs">
                         <span class="text-muted truncate max-w-[140px]">{{ proof.original_filename }}</span>
-                        <a href="{{ url_for('static', filename=proof.relative_path) }}" download="{{ proof.original_filename }}" class="text-accent font-semibold hover:underline flex items-center gap-1">
+                        <a href="{{ url_for('claims.get_claim_document', claim_id=claim._id, filename=proof.stored_filename or proof.relative_path.split('/')[-1]) }}" download="{{ proof.original_filename }}" class="text-accent font-semibold hover:underline flex items-center gap-1">
                             Download
                         </a>
                     </div>

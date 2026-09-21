@@ -1,12 +1,13 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, abort
+from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, abort, send_from_directory
 from flask_login import login_required, current_user
 from bson import ObjectId
 from ..services.claim_service import ClaimService
 from ..services.policy_service import PolicyService
+from ..services.audit_service import AuditService
 from app.utils.upload import save_proof_file
 from app.extensions import get_db
 from ..utils.decorators import role_required
-from ..utils.visibility import assert_can_access
+from ..utils.visibility import assert_can_access, can_access
 
 claims_bp = Blueprint('claims', __name__, url_prefix='/claims')
 
@@ -81,6 +82,15 @@ def new():
             user_id=str(current_user.id),
             policy=policy,
         )
+
+        AuditService.log_action(
+            user_id=str(current_user.id),
+            action="submit_claim",
+            target_type="claim",
+            target_id=str(created_claim['_id']),
+            details={"claim_number": created_claim.get('claim_number'), "policy_id": str(policy_id)}
+        )
+
         if created_claim.get('fraud_level') == 'high_risk':
             flash(f"Claim {created_claim.get('claim_number')} submitted and flagged for adjuster investigation due to high risk assessment.", "warning")
         else:
@@ -118,3 +128,31 @@ def detail(claim_id):
             claim['client_email'] = client.get('email')
 
     return render_template('claims/detail.html', claim=claim)
+
+
+@claims_bp.route('/<claim_id>/documents/<filename>')
+@login_required
+@role_required('admin', 'worker')
+def get_claim_document(claim_id, filename):
+    db = get_db()
+    if not ObjectId.is_valid(claim_id):
+        abort(400, description="Invalid ID format")
+
+    claim = db.claims.find_one({"_id": ObjectId(claim_id)})
+    if not claim:
+        abort(404, description="Claim not found")
+
+    assert_can_access(claim, current_user, "Unauthorized access to claim documents")
+
+    # Verify filename belongs to this claim's proof files
+    proofs = claim.get('proof_files', [])
+    valid_file = any(
+        p.get('stored_filename') == filename or
+        p.get('relative_path', '').endswith(filename)
+        for p in proofs
+    )
+    if not valid_file:
+        abort(404, description="Document not found on this claim")
+
+    upload_folder = current_app.config.get('UPLOAD_FOLDER')
+    return send_from_directory(upload_folder, filename)

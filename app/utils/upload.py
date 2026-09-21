@@ -37,17 +37,15 @@ def save_proof_file(file_storage, upload_folder, category='general'):
     
     file_path = os.path.join(upload_folder, unique_filename)
     file_storage.save(file_path)
-    
-    relative_path = f"uploads/claims/{unique_filename}"
+
     file_type = 'pdf' if ext == 'pdf' else 'image'
-    
+
     return {
         'original_filename': filename,
         'stored_filename': unique_filename,
-        'relative_path': relative_path,
         'file_type': file_type,
         'category': category,
         'file_hash': file_hash,
         'ext': ext,
-        'uploaded_at': datetime.datetime.utcnow().isoformat()
+        'uploaded_at': datetime.datetime.now(datetime.timezone.utc).isoformat()
     }

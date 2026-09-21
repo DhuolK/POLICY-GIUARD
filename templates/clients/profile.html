@@ -1,283 +1,329 @@
 {% extends 'base.html' %}
 
+{% block title %}{{ client.full_name }} — Client Profile — Policy Guard{% endblock %}
+
 {% block content %}
-<div class="flex flex-col gap-8">
-    <!-- Header with Breadcrumbs and Actions -->
-    <header class="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+<div class="flex flex-col gap-6 max-w-7xl mx-auto w-full">
+
+    <!-- Header with Breadcrumbs & Quick Actions -->
+    <header class="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 pb-2 border-b border-divider/60">
         <div>
-            <div class="flex items-center gap-2 text-sm text-muted mb-2">
-                <a href="{{ url_for('clients.index') }}" class="hover:text-primary transition-colors">Clients</a>
-                <span>&rarr;</span>
-                <span class="text-ink">Profile</span>
+            <div class="flex items-center gap-2 text-xs text-muted font-medium mb-1">
+                <a href="{{ url_for('clients.index') }}" class="hover:text-primary transition-colors flex items-center gap-1">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"></path></svg>
+                    <span>Clients Directory</span>
+                </a>
+                <span>&rsaquo;</span>
+                <span class="text-ink font-semibold">Client Profile</span>
             </div>
-            <h1 class="text-4xl font-display font-bold text-ink">{{ client.full_name }}</h1>
-            <p class="text-muted mt-1 font-mono text-xs">System ID: {{ client._id }}</p>
+            <h1 class="text-3xl sm:text-4xl font-display font-bold text-ink tracking-tight">{{ client.full_name }}</h1>
+            <p class="text-muted text-xs sm:text-sm font-mono mt-1">ID / Client Ref: {{ client.client_id }} &bull; SysID: {{ client._id }}</p>
         </div>
-        
-        <div class="flex gap-3">
-            <a href="/vehicles/?search={{ client.client_id }}" class="border border-divider rounded-full px-5 py-2 text-sm text-primary bg-surface hover:bg-surface/50 transition-colors font-semibold shadow-sm">
-                Manage Vehicles
-            </a>
-            <a href="/policies/new?client_id={{ client._id }}" class="magnetic-btn bg-primary text-surface px-5 py-2 rounded-full text-sm font-semibold shadow-sm hover:shadow-md transition-shadow">
-                + Add Issued Policy
+
+        <div class="flex flex-wrap items-center gap-2.5 sm:gap-3 w-full sm:w-auto">
+            <button onclick="openVehicleModal()" class="apple-btn flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-full text-xs font-semibold text-ink bg-surface border border-divider hover:bg-slate-50 shadow-sm transition-all">
+                <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"></path><circle cx="7" cy="17" r="2"></circle><circle cx="17" cy="17" r="2"></circle></svg>
+                <span>+ Register Vehicle</span>
+            </button>
+            <a href="/policies/new?client_id={{ client._id }}" class="apple-btn flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-full text-xs font-semibold text-surface bg-primary hover:bg-primary-dark shadow-sm transition-all">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                <span>Issue New Policy</span>
             </a>
         </div>
     </header>
 
-    <!-- Tab Navigation -->
-    <div class="border-b border-divider/50 flex gap-6 text-sm font-medium">
-        <button onclick="switchTab('overview')" id="tab-btn-overview" class="tab-btn pb-4 border-b-2 border-primary text-primary transition-all">Overview</button>
-        <button onclick="switchTab('vehicles')" id="tab-btn-vehicles" class="tab-btn pb-4 border-b-2 border-transparent text-muted hover:text-ink transition-all">Vehicles ({{ vehicles|length }})</button>
-        <button onclick="switchTab('policies')" id="tab-btn-policies" class="tab-btn pb-4 border-b-2 border-transparent text-muted hover:text-ink transition-all">Policies ({{ policies|length }})</button>
-        <button onclick="switchTab('claims')" id="tab-btn-claims" class="tab-btn pb-4 border-b-2 border-transparent text-muted hover:text-ink transition-all">Claims ({{ claims|length }})</button>
+    <!-- Apple-Style Segmented Control Tabs -->
+    <div class="flex items-center p-1 rounded-2xl bg-slate-200/60 w-full sm:w-fit self-start border border-slate-300/40 shadow-subtle-inner overflow-x-auto">
+        <button onclick="switchTab('overview')" id="tab-btn-overview" class="tab-btn px-4 sm:px-5 py-2 rounded-xl text-xs font-semibold text-primary bg-surface shadow-sm transition-all whitespace-nowrap">
+            Overview
+        </button>
+        <button onclick="switchTab('vehicles')" id="tab-btn-vehicles" class="tab-btn px-4 sm:px-5 py-2 rounded-xl text-xs font-semibold text-muted hover:text-ink transition-all whitespace-nowrap">
+            Vehicles ({{ vehicles|length }})
+        </button>
+        <button onclick="switchTab('policies')" id="tab-btn-policies" class="tab-btn px-4 sm:px-5 py-2 rounded-xl text-xs font-semibold text-muted hover:text-ink transition-all whitespace-nowrap">
+            Policies ({{ policies|length }})
+        </button>
+        <button onclick="switchTab('claims')" id="tab-btn-claims" class="tab-btn px-4 sm:px-5 py-2 rounded-xl text-xs font-semibold text-muted hover:text-ink transition-all whitespace-nowrap">
+            Claims ({{ claims|length }})
+        </button>
     </div>
 
-    <!-- Tab Contents -->
-    <div class="flex flex-col gap-8">
-        <!-- 1. Overview Tab -->
-        <div id="content-overview" class="tab-content flex flex-col lg:flex-row gap-8">
-            <!-- Left Side Details Card -->
-            <div class="glass rounded-3xl p-6 lg:w-1/3 flex flex-col gap-6">
-                <h2 class="text-xl font-display font-bold text-ink">Client Details</h2>
-                
-                <div class="flex flex-col gap-4 text-sm">
-                    <div class="flex justify-between border-b border-divider/30 pb-3">
-                        <span class="text-muted">Full Name</span>
-                        <span class="font-medium text-ink">{{ client.full_name }}</span>
-                    </div>
-                    <div class="flex justify-between border-b border-divider/30 pb-3">
-                        <span class="text-muted">Client ID</span>
-                        <span class="font-medium font-mono text-ink">{{ client.client_id }}</span>
-                    </div>
-                    <div class="flex justify-between border-b border-divider/30 pb-3">
-                        <span class="text-muted">KRA PIN</span>
-                        <span class="font-medium font-mono text-ink">{{ client.kra_pin or 'N/A' }}</span>
-                    </div>
-                    <div class="flex justify-between border-b border-divider/30 pb-3">
-                        <span class="text-muted">Phone Number</span>
-                        <span class="font-medium text-ink">{{ client.phone }}</span>
-                    </div>
-                    <div class="flex justify-between border-b border-divider/30 pb-3">
-                        <span class="text-muted">Email Address</span>
-                        <span class="font-medium text-ink">{{ client.email or 'N/A' }}</span>
-                    </div>
-                    <div class="flex justify-between pb-1">
-                        <span class="text-muted">Registered On</span>
-                        <span class="font-medium text-ink">
-                            {% if client.created_at %}
-                                {{ client.created_at.strftime('%b %d, %Y') }}
-                            {% else %}
-                                Unknown
-                            {% endif %}
+    <!-- Tab 1: Overview Tab -->
+    <div id="content-overview" class="tab-content flex flex-col lg:flex-row gap-6">
+
+        <!-- Left Column: Inset Client Profile Details -->
+        <div class="glass-panel rounded-3xl p-6 lg:w-96 flex flex-col gap-5 border border-slate-200/80 shadow-apple-card shrink-0">
+            <div class="flex items-center gap-3 pb-4 border-b border-divider">
+                <div class="w-12 h-12 rounded-2xl bg-primary-50 text-primary flex items-center justify-center font-display font-bold text-lg border border-primary/20">
+                    {{ client.full_name[:2]|upper }}
+                </div>
+                <div>
+                    <h3 class="text-base font-display font-bold text-ink leading-tight">{{ client.full_name }}</h3>
+                    <p class="text-[11px] text-muted font-mono mt-0.5">{{ client.email or 'No email' }}</p>
+                </div>
+            </div>
+
+            <div class="flex flex-col gap-3 text-xs">
+                <div class="flex items-center justify-between py-1 border-b border-slate-100">
+                    <span class="text-muted">National ID</span>
+                    <span class="font-mono font-semibold text-ink">{{ client.client_id }}</span>
+                </div>
+                <div class="flex items-center justify-between py-1 border-b border-slate-100">
+                    <span class="text-muted">KRA PIN</span>
+                    <span class="font-mono font-semibold text-ink">{{ client.kra_pin or 'N/A' }}</span>
+                </div>
+                <div class="flex items-center justify-between py-1 border-b border-slate-100">
+                    <span class="text-muted">Mobile Phone</span>
+                    <a href="tel:{{ client.phone }}" class="font-mono font-semibold text-primary hover:underline">{{ client.phone }}</a>
+                </div>
+                <div class="flex items-center justify-between py-1 border-b border-slate-100">
+                    <span class="text-muted">Registered Date</span>
+                    <span class="text-ink font-medium">
+                        {{ client.created_at.strftime('%d %b %Y') if client.created_at else '—' }}
+                    </span>
+                </div>
+
+                {% if workers %}
+                <!-- Admin Worker Reassignment Control -->
+                <form method="post" action="{{ url_for('clients.assign', client_id=client._id) }}" class="flex items-center justify-between gap-2 pt-2">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    <label for="assigned_worker_id" class="text-muted font-medium">Assigned Worker</label>
+                    <select id="assigned_worker_id" name="worker_id" onchange="this.form.submit()" class="bg-surface border border-divider rounded-xl px-2.5 py-1 text-xs font-medium text-ink focus:outline-none focus:ring-1 focus:ring-primary transition-all">
+                        <option value="" {% if not client.assigned_worker_id %}selected{% endif %}>Unassigned</option>
+                        {% for worker in workers %}
+                        <option value="{{ worker._id }}" {% if client.assigned_worker_id == worker._id %}selected{% endif %}>{{ worker.full_name }}</option>
+                        {% endfor %}
+                    </select>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Right Column: Metrics & Activity -->
+        <div class="flex-1 flex flex-col gap-6">
+            <!-- Summary KPI Grid -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <!-- Total Vehicles -->
+                <div class="glass-panel p-5 rounded-3xl border border-slate-200/80 shadow-apple-card flex flex-col justify-between">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[11px] font-semibold text-muted uppercase tracking-wider">Vehicles</span>
+                        <span class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-600">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"></path><circle cx="7" cy="17" r="2"></circle><circle cx="17" cy="17" r="2"></circle></svg>
                         </span>
                     </div>
-                    {% if workers %}
-                    <!-- Assignment control: backend-enforced admin-only (POST /clients/<id>/assign) -->
-                    <form method="post" action="{{ url_for('clients.assign', client_id=client._id) }}" class="flex items-center justify-between gap-2 border-t border-divider/30 pt-3">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                        <label for="assigned_worker_id" class="text-muted">Assigned Worker</label>
-                        <select id="assigned_worker_id" name="worker_id" onchange="this.form.submit()" class="bg-surface border border-divider rounded-xl px-2 py-1.5 text-xs font-medium text-ink focus:outline-none focus:border-primary transition-all max-w-[60%]">
-                            <option value="" {% if not client.assigned_worker_id %}selected{% endif %}>Unassigned</option>
-                            {% for worker in workers %}
-                            <option value="{{ worker._id }}" {% if client.assigned_worker_id == worker._id %}selected{% endif %}>{{ worker.full_name }}</option>
-                            {% endfor %}
-                        </select>
-                        <noscript><button type="submit" class="bg-ink text-surface px-3 py-1 rounded-xl text-xs font-medium hover:bg-primary transition-colors">Update</button></noscript>
-                    </form>
+                    <div class="mt-3">
+                        <span class="text-3xl font-display font-bold text-ink tracking-tight">{{ vehicles|length }}</span>
+                        <p class="text-[11px] text-muted mt-0.5">Registered under client</p>
+                    </div>
+                </div>
+
+                <!-- Active Policies -->
+                {% set active_count = namespace(value=0) %}
+                {% for p in policies %}
+                    {% if p.status in ['published', 'active', 'Active'] %}
+                        {% set active_count.value = active_count.value + 1 %}
                     {% endif %}
+                {% endfor %}
+                <div class="glass-panel p-5 rounded-3xl border border-slate-200/80 shadow-apple-card flex flex-col justify-between">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[11px] font-semibold text-muted uppercase tracking-wider">Active Policies</span>
+                        <span class="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-600">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                        </span>
+                    </div>
+                    <div class="mt-3">
+                        <span class="text-3xl font-display font-bold text-emerald-600 tracking-tight">{{ active_count.value }}</span>
+                        <p class="text-[11px] text-muted mt-0.5">Currently in force</p>
+                    </div>
+                </div>
+
+                <!-- Total Claims -->
+                <div class="glass-panel p-5 rounded-3xl border border-slate-200/80 shadow-apple-card flex flex-col justify-between">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[11px] font-semibold text-muted uppercase tracking-wider">Claims Filed</span>
+                        <span class="w-8 h-8 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-600">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                        </span>
+                    </div>
+                    <div class="mt-3">
+                        <span class="text-3xl font-display font-bold text-amber-600 tracking-tight">{{ claims|length }}</span>
+                        <p class="text-[11px] text-muted mt-0.5">Claims history records</p>
+                    </div>
                 </div>
             </div>
 
-            <!-- Right Side Stats and Overview Widgets -->
-            <div class="flex-1 flex flex-col gap-8">
-                <!-- Count Cards Grid -->
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                    <div class="glass rounded-3xl p-6 flex flex-col justify-between h-36">
-                        <span class="text-muted text-sm font-semibold">Total Vehicles</span>
-                        <div class="flex justify-between items-baseline">
-                            <span class="text-5xl font-display font-bold text-primary">{{ vehicles|length }}</span>
-                            <span class="text-muted text-xs">Registered</span>
-                        </div>
-                    </div>
-                    
-                    <div class="glass rounded-3xl p-6 flex flex-col justify-between h-36">
-                        <span class="text-muted text-sm font-semibold">Active Policies</span>
-                        <div class="flex justify-between items-baseline">
-                            {% set active_count = namespace(value=0) %}
-                            {% for p in policies %}
-                                {% if p.status == 'published' %}
-                                    {% set active_count.value = active_count.value + 1 %}
-                                {% endif %}
-                            {% endfor %}
-                            <span class="text-5xl font-display font-bold text-green-600">{{ active_count.value }}</span>
-                            <span class="text-muted text-xs">In Force</span>
-                        </div>
-                    </div>
-                    
-                    <div class="glass rounded-3xl p-6 flex flex-col justify-between h-36">
-                        <span class="text-muted text-sm font-semibold">Total Claims</span>
-                        <div class="flex justify-between items-baseline">
-                            <span class="text-5xl font-display font-bold text-accent">{{ claims|length }}</span>
-                            <span class="text-muted text-xs">Filed</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Recent Activity Feed or Quick Actions Placeholder -->
-                <div class="glass rounded-3xl p-6 flex flex-col gap-4">
-                    <h3 class="text-lg font-display font-bold text-ink">Recent Profile Notes</h3>
-                    <div class="border border-divider/40 bg-surface/30 rounded-2xl p-4 text-sm text-muted italic">
-                        No custom notes are currently pinned to this client profile. Staff can log comments on policies or claim files directly from their respective tabs.
-                    </div>
+            <!-- Notes & Operational Overview -->
+            <div class="glass-panel rounded-3xl p-5 border border-slate-200/80 shadow-apple-card flex flex-col gap-3">
+                <h4 class="text-sm font-display font-bold text-ink">Account Status & Underwriting Notes</h4>
+                <div class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/60 text-xs text-muted leading-relaxed">
+                    Client account is verified and active. All communications regarding policy expirations and vehicle coverages are routed to <span class="font-mono text-ink font-medium">{{ client.phone }}</span> and <span class="font-mono text-ink font-medium">{{ client.email or 'registered email' }}</span>.
                 </div>
             </div>
         </div>
+    </div>
 
-        <!-- 2. Vehicles Tab -->
-        <div id="content-vehicles" class="tab-content hidden glass rounded-3xl p-6">
-            <div class="flex justify-between items-center mb-6">
-                <h2 class="text-xl font-display font-bold text-ink">Registered Vehicles</h2>
-                <div class="flex gap-2">
-                    <a href="/vehicles/" class="border border-divider rounded-full px-4 py-1.5 text-xs text-muted hover:text-ink hover:bg-surface/50 transition-colors inline-flex items-center">
-                        Search Registry
-                    </a>
-                    <button onclick="openVehicleModal()" class="magnetic-btn bg-primary text-surface px-4 py-1.5 rounded-full text-xs font-semibold shadow-sm hover:shadow-md transition-shadow">
-                        + Add Vehicle
-                    </button>
-                </div>
-            </div>
-            
+    <!-- Tab 2: Vehicles Tab -->
+    <div id="content-vehicles" class="tab-content hidden flex flex-col gap-4">
+        <div class="flex justify-between items-center">
+            <h3 class="text-base font-display font-bold text-ink">Registered Fleet Vehicles ({{ vehicles|length }})</h3>
+            <button onclick="openVehicleModal()" class="apple-btn inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold text-surface bg-primary hover:bg-primary-dark shadow-sm">
+                + Add Vehicle
+            </button>
+        </div>
+
+        <div class="glass-panel rounded-3xl p-1 overflow-hidden shadow-apple-card border border-slate-200/80">
             <div class="overflow-x-auto">
-                <table class="w-full text-left border-collapse text-sm">
+                <table class="w-full text-left border-collapse text-xs">
                     <thead>
-                        <tr class="bg-primary text-surface">
-                            <th class="py-4 px-4 font-semibold">Registration Number</th>
-                            <th class="py-4 px-4 font-semibold">Make & Model</th>
-                            <th class="py-4 px-4 font-semibold">Year</th>
-                            <th class="py-4 px-4 font-semibold">Vehicle Type</th>
-                            <th class="py-4 px-4 font-semibold text-right">Actions</th>
+                        <tr class="border-b border-divider bg-slate-50/70 font-semibold text-muted">
+                            <th class="py-3.5 px-5">Plate Number</th>
+                            <th class="py-3.5 px-4">Make & Model</th>
+                            <th class="py-3.5 px-4">Model Year</th>
+                            <th class="py-3.5 px-4">Vehicle Category</th>
+                            <th class="py-3.5 px-5 text-right">Actions</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody class="divide-y divide-slate-100">
                         {% for v in vehicles %}
-                        <tr class="border-b border-divider/30 hover:bg-surface/50 transition-colors">
-                            <td class="py-4 px-4 font-mono font-semibold text-primary">{{ v.registration_number }}</td>
-                            <td class="py-4 px-4 font-medium">{{ v.make }} {{ v.model }}</td>
-                            <td class="py-4 px-4 text-muted">{{ v.year or 'N/A' }}</td>
-                            <td class="py-4 px-4">
-                                <span class="capitalize bg-divider/40 text-ink px-2.5 py-1 rounded-full text-xs font-semibold">{{ v.vehicle_type }}</span>
+                        <tr class="hover:bg-slate-50/80 transition-colors">
+                            <td class="py-3.5 px-5 font-mono font-bold text-primary">{{ v.registration_number }}</td>
+                            <td class="py-3.5 px-4 font-semibold text-ink">{{ v.make }} {{ v.model }}</td>
+                            <td class="py-3.5 px-4 font-mono text-muted">{{ v.year or '—' }}</td>
+                            <td class="py-3.5 px-4">
+                                <span class="capitalize px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                                    {{ v.vehicle_type }}
+                                </span>
                             </td>
-                            <td class="py-4 px-4 text-right">
-                                <a href="/policies/new?vehicle_id={{ v._id }}&client_id={{ client._id }}" class="text-primary hover:underline text-xs font-semibold">Add Issued Policy &rarr;</a>
+                            <td class="py-3.5 px-5 text-right">
+                                <a href="/policies/new?vehicle_id={{ v._id }}&client_id={{ client._id }}" class="apple-btn inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold text-primary bg-primary-50 hover:bg-primary-100 transition-colors">
+                                    <span>Issue Policy</span>
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"></path></svg>
+                                </a>
                             </td>
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="5" class="py-8 text-center text-muted">No vehicles found for this client.</td>
+                            <td colspan="5" class="py-8 text-center text-muted">No vehicles registered for this client.</td>
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
         </div>
+    </div>
 
-        <!-- 3. Policies Tab -->
-        <div id="content-policies" class="tab-content hidden glass rounded-3xl p-6">
-            <div class="flex justify-between items-center mb-6">
-                <h2 class="text-xl font-display font-bold text-ink">Insurance Policies</h2>
-                <a href="/policies/new?client_id={{ client._id }}" class="magnetic-btn bg-primary text-surface px-4 py-2 rounded-full text-xs font-semibold shadow-sm">
-                    + Add Issued Policy
-                </a>
-            </div>
-            
+    <!-- Tab 3: Policies Tab -->
+    <div id="content-policies" class="tab-content hidden flex flex-col gap-4">
+        <div class="flex justify-between items-center">
+            <h3 class="text-base font-display font-bold text-ink">Issued Policies ({{ policies|length }})</h3>
+            <a href="/policies/new?client_id={{ client._id }}" class="apple-btn inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold text-surface bg-primary hover:bg-primary-dark shadow-sm">
+                + Issue Policy
+            </a>
+        </div>
+
+        <div class="glass-panel rounded-3xl p-1 overflow-hidden shadow-apple-card border border-slate-200/80">
             <div class="overflow-x-auto">
-                <table class="w-full text-left border-collapse text-sm">
+                <table class="w-full text-left border-collapse text-xs">
                     <thead>
-                        <tr class="bg-primary text-surface">
-                            <th class="py-4 px-4 font-semibold">Policy Number</th>
-                            <th class="py-4 px-4 font-semibold">Vehicle Reg</th>
-                            <th class="py-4 px-4 font-semibold">Policy Type</th>
-                            <th class="py-4 px-4 font-semibold">Premium Amount</th>
-                            <th class="py-4 px-4 font-semibold">Status</th>
-                            <th class="py-4 px-4 font-semibold text-right">Actions</th>
+                        <tr class="border-b border-divider bg-slate-50/70 font-semibold text-muted">
+                            <th class="py-3.5 px-5">Policy Number</th>
+                            <th class="py-3.5 px-4">Vehicle Plate</th>
+                            <th class="py-3.5 px-4">Policy Type</th>
+                            <th class="py-3.5 px-4">Premium Amount</th>
+                            <th class="py-3.5 px-4">Status</th>
+                            <th class="py-3.5 px-5 text-right">Action</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody class="divide-y divide-slate-100">
                         {% for p in policies %}
-                        <tr class="border-b border-divider/30 hover:bg-surface/50 transition-colors">
-                            <td class="py-4 px-4 font-mono font-semibold">{{ p.policy_number }}</td>
-                            <td class="py-4 px-4 font-mono text-muted">{{ p.vehicle_reg }}</td>
-                            <td class="py-4 px-4 capitalize">{{ p.policy_type }}</td>
-                            <td class="py-4 px-4 font-mono font-medium">KES {{ "{:,.2f}".format(p.premium_amount) if p.premium_amount is number else p.premium_amount }}</td>
-                            <td class="py-4 px-4">
-                                {% if p.status == 'published' %}
-                                    <span class="bg-green-100 text-green-700 px-2.5 py-1 rounded-full text-xs font-semibold">Active</span>
-                                {% elif p.status == 'Suspended' %}
-                                    <span class="bg-red-100 text-red-700 px-2.5 py-1 rounded-full text-xs font-semibold">Suspended</span>
-                                {% elif p.status == 'Dormant' %}
-                                    <span class="bg-yellow-100 text-yellow-700 px-2.5 py-1 rounded-full text-xs font-semibold">Dormant</span>
+                        <tr class="hover:bg-slate-50/80 transition-colors">
+                            <td class="py-3.5 px-5 font-mono font-bold text-primary">
+                                <a href="{{ url_for('policies.detail', policy_id=p._id) }}" class="hover:underline">
+                                    {{ p.policy_number }}
+                                </a>
+                            </td>
+                            <td class="py-3.5 px-4 font-mono font-bold text-ink">{{ p.vehicle_reg }}</td>
+                            <td class="py-3.5 px-4 capitalize text-ink">{{ p.policy_type|replace('_', ' ') }}</td>
+                            <td class="py-3.5 px-4 font-mono font-medium text-ink">
+                                KES {{ "{:,.2f}".format(p.premium_amount) if p.premium_amount is number else p.premium_amount }}
+                            </td>
+                            <td class="py-3.5 px-4">
+                                {% if p.status in ['published', 'active', 'Active'] %}
+                                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-700 border border-emerald-500/20">
+                                        Active
+                                    </span>
+                                {% elif p.status in ['suspended', 'Suspended'] %}
+                                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500/10 text-amber-700 border border-amber-500/20">
+                                        Suspended
+                                    </span>
                                 {% else %}
-                                    <span class="bg-gray-100 text-gray-700 px-2.5 py-1 rounded-full text-xs font-semibold">{{ p.status }}</span>
+                                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                                        {{ p.status|title }}
+                                    </span>
                                 {% endif %}
                             </td>
-                            <td class="py-4 px-4 text-right">
-                                <a href="/policies/{{ p._id }}" class="border border-divider rounded-full px-3 py-1 text-xs text-primary font-medium bg-surface hover:bg-surface/50 transition-colors">View Details</a>
+                            <td class="py-3.5 px-5 text-right">
+                                <a href="{{ url_for('policies.detail', policy_id=p._id) }}" class="apple-btn px-3 py-1 rounded-lg text-xs font-semibold text-primary hover:bg-primary-50 transition-colors">
+                                    View Policy &rarr;
+                                </a>
                             </td>
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="6" class="py-8 text-center text-muted">No insurance policies have been issued to this client yet.</td>
+                            <td colspan="6" class="py-8 text-center text-muted">No policies issued for this client yet.</td>
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
         </div>
+    </div>
 
-        <!-- 4. Claims Tab -->
-        <div id="content-claims" class="tab-content hidden glass rounded-3xl p-6">
-            <div class="flex justify-between items-center mb-6">
-                <h2 class="text-xl font-display font-bold text-ink">Claims History</h2>
-                <a href="/claims/" class="border border-divider rounded-full px-4 py-1.5 text-xs text-primary font-medium bg-surface hover:bg-surface/50 transition-colors">
-                    Global Claims List
-                </a>
-            </div>
-            
+    <!-- Tab 4: Claims Tab -->
+    <div id="content-claims" class="tab-content hidden flex flex-col gap-4">
+        <div class="flex justify-between items-center">
+            <h3 class="text-base font-display font-bold text-ink">Claims History ({{ claims|length }})</h3>
+            <a href="{{ url_for('claims.list') }}" class="apple-btn inline-flex items-center gap-1 px-3.5 py-1.5 rounded-full text-xs font-medium text-ink bg-surface border border-divider hover:bg-slate-50 shadow-sm">
+                Claims Directory
+            </a>
+        </div>
+
+        <div class="glass-panel rounded-3xl p-1 overflow-hidden shadow-apple-card border border-slate-200/80">
             <div class="overflow-x-auto">
-                <table class="w-full text-left border-collapse text-sm">
+                <table class="w-full text-left border-collapse text-xs">
                     <thead>
-                        <tr class="bg-primary text-surface">
-                            <th class="py-4 px-4 font-semibold">Claim Number</th>
-                            <th class="py-4 px-4 font-semibold">Policy Number</th>
-                            <th class="py-4 px-4 font-semibold">Incident Date</th>
-                            <th class="py-4 px-4 font-semibold">Status</th>
-                            <th class="py-4 px-4 font-semibold text-right">Actions</th>
+                        <tr class="border-b border-divider bg-slate-50/70 font-semibold text-muted">
+                            <th class="py-3.5 px-5">Claim Number</th>
+                            <th class="py-3.5 px-4">Policy Ref</th>
+                            <th class="py-3.5 px-4">Incident Date</th>
+                            <th class="py-3.5 px-4">Status</th>
+                            <th class="py-3.5 px-5 text-right">Action</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody class="divide-y divide-slate-100">
                         {% for c in claims %}
-                        <tr class="border-b border-divider/30 hover:bg-surface/50 transition-colors">
-                            <td class="py-4 px-4 font-mono font-semibold">{{ c.claim_number }}</td>
-                            <td class="py-4 px-4 font-mono text-muted">{{ c.policy_number }}</td>
-                            <td class="py-4 px-4 text-muted">{{ c.incident_date }}</td>
-                            <td class="py-4 px-4">
+                        <tr class="hover:bg-slate-50/80 transition-colors">
+                            <td class="py-3.5 px-5 font-mono font-bold text-primary">{{ c.claim_number }}</td>
+                            <td class="py-3.5 px-4 font-mono text-muted">{{ c.policy_number }}</td>
+                            <td class="py-3.5 px-4 text-muted">{{ c.incident_date }}</td>
+                            <td class="py-3.5 px-4">
                                 {% if c.status == 'approved' %}
-                                    <span class="bg-green-100 text-green-700 px-2.5 py-1 rounded-full text-xs font-semibold">Approved</span>
-                                {% elif c.status == 'rejected' %}
-                                    <span class="bg-red-100 text-red-700 px-2.5 py-1 rounded-full text-xs font-semibold">Rejected</span>
-                                {% elif c.status == 'review' %}
-                                    <span class="bg-yellow-100 text-yellow-700 px-2.5 py-1 rounded-full text-xs font-semibold">Under Review</span>
+                                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-700 border border-emerald-500/20">Approved</span>
+                                {% elif c.status == 'flagged_investigation' %}
+                                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-rose-500/10 text-rose-700 border border-rose-500/20">Flagged</span>
                                 {% else %}
-                                    <span class="bg-blue-100 text-primary px-2.5 py-1 rounded-full text-xs font-semibold capitalize">{{ c.status }}</span>
+                                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-blue-500/10 text-blue-700 border border-blue-500/20 capitalize">{{ c.status }}</span>
                                 {% endif %}
                             </td>
-                            <td class="py-4 px-4 text-right">
-                                <a href="/claims/{{ c._id }}" class="border border-divider rounded-full px-3 py-1 text-xs text-primary font-medium bg-surface hover:bg-surface/50 transition-colors">View Timeline</a>
+                            <td class="py-3.5 px-5 text-right">
+                                <a href="{{ url_for('claims.detail', claim_id=c._id) }}" class="apple-btn px-3 py-1 rounded-lg text-xs font-semibold text-primary hover:bg-primary-50 transition-colors">
+                                    Details &rarr;
+                                </a>
                             </td>
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="5" class="py-8 text-center text-muted">No claims filed under this client profile.</td>
+                            <td colspan="5" class="py-8 text-center text-muted">No claims records under this client profile.</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -287,80 +333,83 @@
     </div>
 </div>
 
-<!-- Add Vehicle Modal -->
-<div id="addVehicleModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-ink/50 backdrop-blur-sm overflow-y-auto py-10">
-    <div class="glass rounded-3xl p-8 max-w-md w-full mx-4 shadow-xl border border-divider/60 my-auto">
-        <h2 class="text-2xl font-display font-bold text-ink mb-6">Add New Vehicle</h2>
+<!-- Add Vehicle Modal (Apple Sheet Style) -->
+<div id="addVehicleModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-ink/40 backdrop-blur-md overflow-y-auto p-4 py-8">
+    <div class="glass-dropdown rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-slate-200/80 my-auto transform transition-all animate-in">
+        <div class="flex justify-between items-start mb-6">
+            <div>
+                <h2 class="text-xl font-display font-bold text-ink">Register Vehicle</h2>
+                <p class="text-xs text-muted mt-0.5">Attach a new vehicle to {{ client.full_name }}</p>
+            </div>
+            <button type="button" onclick="closeVehicleModal()" class="w-8 h-8 rounded-full border border-divider flex items-center justify-center text-muted hover:text-ink hover:bg-slate-100 transition-all apple-btn">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+
         <form id="addVehicleForm" onsubmit="submitVehicleForm(event)" class="flex flex-col gap-4">
-            <div id="vehicleFormError" class="hidden text-red-500 text-sm mb-2 font-medium bg-red-50 p-3 rounded-xl border border-red-200"></div>
-            
+            <div id="vehicleFormError" class="hidden text-rose-600 text-xs font-medium bg-rose-50 p-3 rounded-xl border border-rose-200"></div>
+
             <input type="hidden" id="v_owner_id" value="{{ client._id }}">
-            
+
             <div class="flex flex-col gap-1">
-                <label for="v_reg_number" class="text-xs font-semibold text-muted ml-1">Registration Number</label>
-                <input type="text" id="v_reg_number" required placeholder="e.g. KCA 123A" class="w-full bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary font-mono uppercase transition-all">
+                <label for="v_reg_number" class="text-[11px] font-semibold text-ink uppercase tracking-wider">Registration Number</label>
+                <input type="text" id="v_reg_number" required placeholder="e.g. KCA 123A" class="w-full bg-surface border border-divider rounded-xl px-3.5 py-2.5 text-xs font-mono uppercase focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all">
             </div>
-            
+
             <div class="grid grid-cols-2 gap-3">
                 <div class="flex flex-col gap-1">
-                    <label for="v_add_make" class="text-xs font-semibold text-muted ml-1">Make</label>
-                    <input type="text" id="v_add_make" required placeholder="e.g. Toyota" class="w-full bg-surface border border-divider rounded-xl px-4.5 py-3 text-sm focus:outline-none focus:border-primary transition-all">
+                    <label for="v_add_make" class="text-[11px] font-semibold text-ink uppercase tracking-wider">Make</label>
+                    <input type="text" id="v_add_make" required placeholder="e.g. Toyota" class="w-full bg-surface border border-divider rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all">
                 </div>
                 <div class="flex flex-col gap-1">
-                    <label for="v_add_model" class="text-xs font-semibold text-muted ml-1">Model</label>
-                    <input type="text" id="v_add_model" required placeholder="e.g. Corolla" class="w-full bg-surface border border-divider rounded-xl px-4.5 py-3 text-sm focus:outline-none focus:border-primary transition-all">
+                    <label for="v_add_model" class="text-[11px] font-semibold text-ink uppercase tracking-wider">Model</label>
+                    <input type="text" id="v_add_model" required placeholder="e.g. Premio" class="w-full bg-surface border border-divider rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all">
                 </div>
             </div>
-            
+
             <div class="grid grid-cols-2 gap-3">
                 <div class="flex flex-col gap-1">
-                    <label for="v_add_year" class="text-xs font-semibold text-muted ml-1">Year</label>
-                    <input type="number" id="v_add_year" required placeholder="e.g. 2022" class="w-full bg-surface border border-divider rounded-xl px-4.5 py-3 text-sm focus:outline-none focus:border-primary transition-all">
+                    <label for="v_add_year" class="text-[11px] font-semibold text-ink uppercase tracking-wider">Year</label>
+                    <input type="number" id="v_add_year" required placeholder="e.g. 2021" class="w-full bg-surface border border-divider rounded-xl px-3.5 py-2.5 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all">
                 </div>
                 <div class="flex flex-col gap-1">
-                    <label for="v_add_type" class="text-xs font-semibold text-muted ml-1">Vehicle Type</label>
-                    <select id="v_add_type" class="w-full bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary transition-all">
+                    <label for="v_add_type" class="text-[11px] font-semibold text-ink uppercase tracking-wider">Vehicle Type</label>
+                    <select id="v_add_type" class="w-full bg-surface border border-divider rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all">
                         <option value="private" selected>Private</option>
                         <option value="commercial">Commercial</option>
                         <option value="psv">PSV (Public Service)</option>
                     </select>
                 </div>
             </div>
-            
-            <div class="flex justify-end gap-3 mt-4">
-                <button type="button" onclick="closeVehicleModal()" class="px-6 py-2.5 rounded-full text-muted hover:bg-surface border border-transparent hover:border-divider/50 transition-colors font-medium text-sm">Cancel</button>
-                <button type="submit" class="magnetic-btn bg-primary text-surface px-6 py-2.5 rounded-full font-medium shadow-sm text-sm">Save Vehicle</button>
+
+            <div class="flex justify-end gap-2.5 mt-2 pt-3 border-t border-divider">
+                <button type="button" onclick="closeVehicleModal()" class="px-4 py-2 rounded-full text-xs font-medium text-muted hover:bg-slate-100 transition-colors">Cancel</button>
+                <button type="submit" class="apple-btn bg-primary hover:bg-primary-dark text-surface px-5 py-2 rounded-full text-xs font-semibold shadow-sm">Save Vehicle</button>
             </div>
         </form>
     </div>
 </div>
+{% endblock %}
 
+{% block scripts %}
 <script>
 function switchTab(tabId) {
-    // Hide all tab contents
     const contents = document.querySelectorAll('.tab-content');
-    contents.forEach(content => {
-        content.classList.add('hidden');
-    });
-    
-    // Show active tab content
-    const activeContent = document.getElementById(`content-${tabId}`);
-    if (activeContent) {
-        activeContent.classList.remove('hidden');
-    }
-    
-    // Reset all tab button styles
+    contents.forEach(c => c.classList.add('hidden'));
+
+    const active = document.getElementById(`content-${tabId}`);
+    if (active) active.classList.remove('hidden');
+
     const buttons = document.querySelectorAll('.tab-btn');
     buttons.forEach(btn => {
-        btn.classList.remove('border-primary', 'text-primary');
-        btn.classList.add('border-transparent', 'text-muted');
+        btn.classList.remove('bg-surface', 'text-primary', 'shadow-sm');
+        btn.classList.add('text-muted');
     });
-    
-    // Set active tab button style
+
     const activeBtn = document.getElementById(`tab-btn-${tabId}`);
     if (activeBtn) {
-        activeBtn.classList.remove('border-transparent', 'text-muted');
-        activeBtn.classList.add('border-primary', 'text-primary');
+        activeBtn.classList.remove('text-muted');
+        activeBtn.classList.add('bg-surface', 'text-primary', 'shadow-sm');
     }
 }
 
@@ -374,54 +423,28 @@ function closeVehicleModal() {
     const modal = document.getElementById('addVehicleModal');
     modal.classList.remove('flex');
     modal.classList.add('hidden');
-    
     document.getElementById('addVehicleForm').reset();
     document.getElementById('vehicleFormError').classList.add('hidden');
-    
-    const inputs = ['v_reg_number', 'v_add_make', 'v_add_model', 'v_add_year'];
-    inputs.forEach(id => {
-        const input = document.getElementById(id);
-        if (input) {
-            input.classList.remove('border-red-500');
-            input.classList.add('border-divider');
-        }
-    });
 }
 
 async function submitVehicleForm(event) {
     event.preventDefault();
-    
     const errorDiv = document.getElementById('vehicleFormError');
     errorDiv.classList.add('hidden');
-    
+
     const owner_id = document.getElementById('v_owner_id').value;
     const registration_number = document.getElementById('v_reg_number').value.trim();
     const make = document.getElementById('v_add_make').value.trim();
     const model = document.getElementById('v_add_model').value.trim();
     const year = document.getElementById('v_add_year').value.trim();
     const vehicle_type = document.getElementById('v_add_type').value;
-    
-    const inputs = { v_reg_number: registration_number, v_add_make: make, v_add_model: model, v_add_year: year };
-    let hasEmpty = false;
-    
-    for (const [id, val] of Object.entries(inputs)) {
-        const input = document.getElementById(id);
-        if (!val) {
-            input.classList.remove('border-divider');
-            input.classList.add('border-red-500');
-            hasEmpty = true;
-        } else {
-            input.classList.remove('border-red-500');
-            input.classList.add('border-divider');
-        }
-    }
-    
-    if (hasEmpty) {
-        errorDiv.innerText = "Please fill in all vehicle fields.";
+
+    if (!registration_number || !make || !model || !year) {
+        errorDiv.innerText = "Please complete all vehicle identification fields.";
         errorDiv.classList.remove('hidden');
         return;
     }
-    
+
     try {
         const response = await fetch('/vehicles/api/add', {
             method: 'POST',
@@ -430,29 +453,20 @@ async function submitVehicleForm(event) {
                 'X-CSRFToken': '{{ csrf_token() }}'
             },
             body: JSON.stringify({
-                owner_id,
-                registration_number,
-                make,
-                model,
-                year,
-                vehicle_type
+                owner_id, registration_number, make, model, year, vehicle_type
             })
         });
-        
+
         const result = await response.json();
-        
         if (response.ok && result.success) {
             closeVehicleModal();
             window.location.reload();
         } else {
-            errorDiv.innerText = result.error || "Failed to add vehicle. Please try again.";
+            errorDiv.innerText = result.error || "Failed to register vehicle.";
             errorDiv.classList.remove('hidden');
-            if (result.error && result.error.includes("already exists")) {
-                document.getElementById('v_reg_number').classList.add('border-red-500');
-            }
         }
     } catch (err) {
-        errorDiv.innerText = "Network error. Unable to contact server.";
+        errorDiv.innerText = "Network error. Unable to establish connection.";
         errorDiv.classList.remove('hidden');
     }
 }

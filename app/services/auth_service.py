@@ -116,6 +116,42 @@ class AuthService:
         return user_doc, None
 
     @staticmethod
+    def reset_password(user_id, new_password):
+        """Admin override to reset a staff member's password.
+
+        Clears lockout and sets new password hash.
+        """
+        db = get_db()
+        if not ObjectId.is_valid(user_id):
+            return None, "Invalid user id."
+
+        if not new_password or len(new_password) < 6:
+            return None, "Password must be at least 6 characters long."
+
+        user = db.users.find_one({'_id': ObjectId(user_id)})
+        if not user:
+            return None, "User not found."
+        if user.get('role') not in LOGIN_ROLES:
+            return None, "Only staff accounts have passwords."
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        db.users.update_one(
+            {'_id': ObjectId(user_id)},
+            {
+                '$set': {
+                    'password_hash': generate_password_hash(new_password),
+                    'updated_at': now
+                },
+                '$unset': {
+                    'failed_login_attempts': '',
+                    'last_failed_login': ''
+                }
+            }
+        )
+        user['updated_at'] = now
+        return user, None
+
+    @staticmethod
     def set_disabled(user_id, disabled):
         """Enable/disable a staff account. Returns (user_doc, error)."""
         db = get_db()

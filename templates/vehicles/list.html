@@ -1,120 +1,256 @@
 {% extends 'base.html' %}
 
+{% block title %}Vehicles Registry — Policy Guard{% endblock %}
+
 {% block content %}
-<div class="flex flex-col gap-8">
-    <header class="flex justify-between items-end">
+<div class="flex flex-col gap-6 max-w-7xl mx-auto w-full">
+
+    <!-- Header & Actions -->
+    <header class="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 pb-2 border-b border-divider/60">
         <div>
-            <h1 class="text-4xl font-display font-bold text-ink">Vehicles</h1>
-            <p class="text-muted mt-1">Manage all insured vehicles.</p>
+            <div class="flex items-center gap-2 text-xs text-muted font-medium mb-1">
+                <span>Fleet Management</span>
+                <span>&rsaquo;</span>
+                <span class="text-ink font-semibold">Vehicles</span>
+            </div>
+            <h1 class="text-3xl sm:text-4xl font-display font-bold text-ink tracking-tight">Insured Vehicles Registry</h1>
+            <p class="text-muted text-xs sm:text-sm mt-1">Manage all registered motor vehicles, ownership records, and active policy linkages</p>
         </div>
-        
-        <div class="flex gap-4">
-            <button onclick="openVehicleModal()" class="magnetic-btn bg-primary text-surface px-6 py-2.5 rounded-full font-medium shadow-sm hover:shadow-md transition-shadow">
-                + Add Vehicle
+
+        <div class="flex items-center gap-3 w-full sm:w-auto">
+            <button onclick="openVehicleModal()" class="apple-btn flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-full text-xs font-semibold text-surface bg-primary hover:bg-primary-dark shadow-sm transition-all">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                <span>+ Add Vehicle</span>
             </button>
         </div>
     </header>
 
-    <div class="glass rounded-3xl p-6">
-        <form method="GET" class="flex gap-4 mb-6">
-            <select name="type" class="bg-surface border border-divider rounded-full px-6 py-3 text-sm focus:outline-none focus:border-primary transition-colors">
-                <option value="">All Types</option>
-                <option value="private" {% if vehicle_type == 'private' %}selected{% endif %}>Private</option>
-                <option value="commercial" {% if vehicle_type == 'commercial' %}selected{% endif %}>Commercial</option>
-                <option value="psv" {% if vehicle_type == 'psv' %}selected{% endif %}>PSV</option>
-            </select>
-            <input type="text" name="search" value="{{ search_query or '' }}" placeholder="Search by registration, make, model..." class="flex-1 bg-surface border border-divider rounded-full px-6 py-3 text-sm focus:outline-none focus:border-primary transition-colors">
-            <button type="submit" class="magnetic-btn bg-ink text-surface px-6 py-3 rounded-full font-medium">Search</button>
-        </form>
+    <!-- Apple-Style Segmented Control Filters & Search Bar -->
+    <div class="flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-4">
+        <!-- Segmented Vehicle Type Pills -->
+        <div class="flex items-center p-1 rounded-2xl bg-slate-200/60 w-full sm:w-fit self-start border border-slate-300/40 shadow-subtle-inner overflow-x-auto">
+            <a href="?search={{ search_query or '' }}" class="px-4 py-1.5 rounded-xl text-xs font-semibold {% if not vehicle_type %}bg-surface text-primary shadow-sm{% else %}text-muted hover:text-ink{% endif %} transition-all whitespace-nowrap">
+                All Types
+            </a>
+            <a href="?type=private&search={{ search_query or '' }}" class="px-4 py-1.5 rounded-xl text-xs font-semibold {% if vehicle_type == 'private' %}bg-surface text-primary shadow-sm{% else %}text-muted hover:text-ink{% endif %} transition-all whitespace-nowrap">
+                Private
+            </a>
+            <a href="?type=commercial&search={{ search_query or '' }}" class="px-4 py-1.5 rounded-xl text-xs font-semibold {% if vehicle_type == 'commercial' %}bg-surface text-primary shadow-sm{% else %}text-muted hover:text-ink{% endif %} transition-all whitespace-nowrap">
+                Commercial
+            </a>
+            <a href="?type=psv&search={{ search_query or '' }}" class="px-4 py-1.5 rounded-xl text-xs font-semibold {% if vehicle_type == 'psv' %}bg-surface text-primary shadow-sm{% else %}text-muted hover:text-ink{% endif %} transition-all whitespace-nowrap">
+                PSV (Public)
+            </a>
+        </div>
 
+        <!-- Search Form -->
+        <form method="GET" class="flex items-center gap-2 w-full lg:w-96">
+            {% if vehicle_type %}
+            <input type="hidden" name="type" value="{{ vehicle_type }}">
+            {% endif %}
+            <div class="relative flex-1">
+                <svg class="w-4 h-4 text-muted absolute left-3.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+                <input type="text" name="search" value="{{ search_query or '' }}" placeholder="Search plate, make, model, or owner..." class="w-full bg-surface border border-divider rounded-full pl-9 pr-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all">
+            </div>
+            <button type="submit" class="apple-btn bg-ink hover:bg-slate-800 text-surface px-5 py-2 rounded-full text-xs font-semibold shadow-sm">
+                Search
+            </button>
+        </form>
+    </div>
+
+    <!-- Desktop Vehicles Table View (>= 768px) -->
+    <div class="hidden md:block glass-panel rounded-3xl p-1 overflow-hidden shadow-apple-card border border-slate-200/80">
         <div class="overflow-x-auto">
             <table class="w-full text-left border-collapse">
                 <thead>
-                    <tr class="border-b border-divider/50">
-                        <th class="py-4 px-4 font-medium text-sm text-muted">Registration</th>
-                        <th class="py-4 px-4 font-medium text-sm text-muted">Owner Name</th>
-                        <th class="py-4 px-4 font-medium text-sm text-muted">Make & Model</th>
-                        <th class="py-4 px-4 font-medium text-sm text-muted">Type</th>
-                        <th class="py-4 px-4 font-medium text-sm text-muted">Active Policy</th>
-                        <th class="py-4 px-4 font-medium text-sm text-muted text-right">Actions</th>
+                    <tr class="border-b border-divider bg-slate-50/70 text-xs font-semibold text-muted">
+                        <th class="py-3.5 px-5">Registration Plate</th>
+                        <th class="py-3.5 px-4">Owner / Insured Client</th>
+                        <th class="py-3.5 px-4">Make & Model</th>
+                        <th class="py-3.5 px-4">Category</th>
+                        <th class="py-3.5 px-4">Active Policy</th>
+                        <th class="py-3.5 px-5 text-right">Actions</th>
                     </tr>
                 </thead>
-                <tbody class="text-sm">
+                <tbody class="text-xs divide-y divide-slate-100">
                     {% for vehicle in vehicles %}
-                    <tr class="border-b border-divider/30 hover:bg-surface/50 transition-colors">
-                        <td class="py-4 px-4 font-mono font-bold">{{ vehicle.registration_number }}</td>
-                        <td class="py-4 px-4 font-medium">
-                            <a href="/clients/{{ vehicle.owner_id }}" class="hover:underline text-primary font-medium">{{ vehicle.owner_name }}</a>
+                    <tr class="hover:bg-slate-50/80 transition-colors group">
+                        <!-- Registration Plate -->
+                        <td class="py-3.5 px-5">
+                            <span class="inline-block bg-slate-100 border border-slate-200 px-2.5 py-0.5 rounded-md font-mono font-bold text-ink text-xs">
+                                {{ vehicle.registration_number }}
+                            </span>
                         </td>
-                        <td class="py-4 px-4">{{ vehicle.make }} {{ vehicle.model }} ({{ vehicle.year }})</td>
-                        <td class="py-4 px-4 capitalize">{{ vehicle.vehicle_type }}</td>
-                        <td class="py-4 px-4">{{ vehicle.active_policy }}</td>
-                        <td class="py-4 px-4 text-right">
-                            <a href="/clients/{{ vehicle.owner_id }}" class="text-primary hover:underline font-medium">View Owner</a>
+
+                        <!-- Owner -->
+                        <td class="py-3.5 px-4">
+                            <a href="/clients/{{ vehicle.owner_id }}" class="font-semibold text-ink group-hover:text-primary transition-colors block">
+                                {{ vehicle.owner_name }}
+                            </a>
+                        </td>
+
+                        <!-- Make & Model -->
+                        <td class="py-3.5 px-4 text-ink font-medium">
+                            {{ vehicle.make }} {{ vehicle.model }}
+                            {% if vehicle.year %}
+                                <span class="text-muted font-mono text-[11px]">({{ vehicle.year }})</span>
+                            {% endif %}
+                        </td>
+
+                        <!-- Vehicle Type Badge -->
+                        <td class="py-3.5 px-4">
+                            {% if vehicle.vehicle_type == 'private' %}
+                                <span class="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-700 border border-emerald-500/20">Private</span>
+                            {% elif vehicle.vehicle_type == 'commercial' %}
+                                <span class="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-blue-500/10 text-blue-700 border border-blue-500/20">Commercial</span>
+                            {% elif vehicle.vehicle_type == 'psv' %}
+                                <span class="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500/10 text-amber-700 border border-amber-500/20">PSV Public</span>
+                            {% else %}
+                                <span class="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-700 border border-slate-200 capitalize">{{ vehicle.vehicle_type }}</span>
+                            {% endif %}
+                        </td>
+
+                        <!-- Active Policy -->
+                        <td class="py-3.5 px-4 font-mono text-muted text-[11px]">
+                            {% if vehicle.active_policy and vehicle.active_policy != 'None' %}
+                                <span class="font-bold text-primary">{{ vehicle.active_policy }}</span>
+                            {% else %}
+                                <span class="text-slate-400 italic">No Active Policy</span>
+                            {% endif %}
+                        </td>
+
+                        <!-- Action -->
+                        <td class="py-3.5 px-5 text-right">
+                            <div class="inline-flex items-center gap-2 justify-end">
+                                <a href="/clients/{{ vehicle.owner_id }}" class="apple-btn px-3 py-1 rounded-lg text-xs font-semibold text-primary hover:bg-primary-50 transition-colors">
+                                    Owner Profile &rarr;
+                                </a>
+                            </div>
                         </td>
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="6" class="py-8 text-center text-muted">No vehicles found matching your criteria.</td>
+                        <td colspan="6" class="py-12 text-center text-muted">
+                            <svg class="w-10 h-10 text-slate-300 mx-auto mb-2" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"></path><circle cx="7" cy="17" r="2"></circle><circle cx="17" cy="17" r="2"></circle></svg>
+                            <p class="text-sm font-medium">No vehicles registered matching your criteria.</p>
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
     </div>
+
+    <!-- Mobile Stacked Card View (< 768px Fallback) -->
+    <div class="block md:hidden flex flex-col gap-3">
+        {% for vehicle in vehicles %}
+        <div class="glass-panel p-4 rounded-2xl shadow-apple-card border border-slate-200/80 flex flex-col gap-3">
+            <div class="flex items-start justify-between border-b border-divider/60 pb-2.5">
+                <div>
+                    <span class="inline-block bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md font-mono font-bold text-ink text-xs">
+                        {{ vehicle.registration_number }}
+                    </span>
+                    <p class="text-xs font-semibold text-ink mt-1">{{ vehicle.make }} {{ vehicle.model }} ({{ vehicle.year or 'N/A' }})</p>
+                </div>
+                <div>
+                    {% if vehicle.vehicle_type == 'private' %}
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-700 border border-emerald-500/20">Private</span>
+                    {% elif vehicle.vehicle_type == 'commercial' %}
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-500/10 text-blue-700 border border-blue-500/20">Commercial</span>
+                    {% else %}
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-700 border border-amber-500/20">PSV</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 text-xs">
+                <div>
+                    <span class="text-[10px] text-muted uppercase tracking-wider block">Insured Owner</span>
+                    <a href="/clients/{{ vehicle.owner_id }}" class="font-semibold text-primary hover:underline">{{ vehicle.owner_name }}</a>
+                </div>
+                <div>
+                    <span class="text-[10px] text-muted uppercase tracking-wider block">Active Policy</span>
+                    <span class="font-mono text-muted text-[11px]">{{ vehicle.active_policy or 'None' }}</span>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end pt-2 border-t border-divider/40">
+                <a href="/clients/{{ vehicle.owner_id }}" class="apple-btn px-4 py-1.5 rounded-full text-xs font-semibold text-surface bg-primary hover:bg-primary-dark">
+                    View Owner Profile &rarr;
+                </a>
+            </div>
+        </div>
+        {% else %}
+        <div class="glass-panel p-8 rounded-2xl text-center text-muted">
+            <p class="text-xs font-medium">No vehicles registered.</p>
+        </div>
+        {% endfor %}
+    </div>
+
 </div>
 
-<!-- Add Vehicle Modal -->
-<div id="addVehicleModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-ink/50 backdrop-blur-sm overflow-y-auto py-10">
-    <div class="glass rounded-3xl p-8 max-w-md w-full mx-4 shadow-xl border border-divider/60 my-auto">
-        <h2 class="text-2xl font-display font-bold text-ink mb-6">Add New Vehicle</h2>
+<!-- Add Vehicle Modal (Apple Sheet Style) -->
+<div id="addVehicleModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-ink/40 backdrop-blur-md overflow-y-auto p-4 py-8">
+    <div class="glass-dropdown rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-slate-200/80 my-auto transform transition-all animate-in">
+        <div class="flex justify-between items-start mb-6">
+            <div>
+                <h2 class="text-xl font-display font-bold text-ink">Register New Vehicle</h2>
+                <p class="text-xs text-muted mt-0.5">Attach an insured motor vehicle to an existing client</p>
+            </div>
+            <button type="button" onclick="closeVehicleModal()" class="w-8 h-8 rounded-full border border-divider flex items-center justify-center text-muted hover:text-ink hover:bg-slate-100 transition-all apple-btn">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+
         <form id="addVehicleForm" onsubmit="submitVehicleForm(event)" class="flex flex-col gap-4">
-            <div id="vehicleFormError" class="hidden text-red-500 text-sm mb-2 font-medium bg-red-50 p-3 rounded-xl border border-red-200"></div>
-            
+            <div id="vehicleFormError" class="hidden text-rose-600 text-xs font-medium bg-rose-50 p-3 rounded-xl border border-rose-200"></div>
+
             <div class="flex flex-col gap-1">
-                <label for="v_owner_id" class="text-xs font-semibold text-muted ml-1">Owner / Client</label>
-                <select id="v_owner_id" required class="w-full bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary transition-all">
-                    <option value="" disabled selected>Select Owner...</option>
+                <label for="v_owner_id" class="text-[11px] font-semibold text-ink uppercase tracking-wider">Owner / Insured Client</label>
+                <select id="v_owner_id" required class="w-full bg-surface border border-divider rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all">
+                    <option value="" disabled selected>Select registered client...</option>
                     {% for c in clients %}
-                    <option value="{{ c._id }}">{{ c.full_name }} ({{ c.client_id }})</option>
+                    <option value="{{ c._id }}">{{ c.full_name }} (ID: {{ c.client_id }})</option>
                     {% endfor %}
                 </select>
             </div>
 
             <div class="flex flex-col gap-1">
-                <label for="v_reg_number" class="text-xs font-semibold text-muted ml-1">Registration Number</label>
-                <input type="text" id="v_reg_number" required placeholder="e.g. KCA 123A" class="w-full bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary font-mono uppercase transition-all">
+                <label for="v_reg_number" class="text-[11px] font-semibold text-ink uppercase tracking-wider">Registration Number</label>
+                <input type="text" id="v_reg_number" required placeholder="e.g. KCA 123A" class="w-full bg-surface border border-divider rounded-xl px-3.5 py-2.5 text-xs font-mono uppercase focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all">
             </div>
-            
+
             <div class="grid grid-cols-2 gap-3">
                 <div class="flex flex-col gap-1">
-                    <label for="v_add_make" class="text-xs font-semibold text-muted ml-1">Make</label>
-                    <input type="text" id="v_add_make" required placeholder="e.g. Toyota" class="w-full bg-surface border border-divider rounded-xl px-4.5 py-3 text-sm focus:outline-none focus:border-primary transition-all">
+                    <label for="v_add_make" class="text-[11px] font-semibold text-ink uppercase tracking-wider">Make</label>
+                    <input type="text" id="v_add_make" required placeholder="e.g. Toyota" class="w-full bg-surface border border-divider rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all">
                 </div>
                 <div class="flex flex-col gap-1">
-                    <label for="v_add_model" class="text-xs font-semibold text-muted ml-1">Model</label>
-                    <input type="text" id="v_add_model" required placeholder="e.g. Corolla" class="w-full bg-surface border border-divider rounded-xl px-4.5 py-3 text-sm focus:outline-none focus:border-primary transition-all">
+                    <label for="v_add_model" class="text-[11px] font-semibold text-ink uppercase tracking-wider">Model</label>
+                    <input type="text" id="v_add_model" required placeholder="e.g. Corolla" class="w-full bg-surface border border-divider rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all">
                 </div>
             </div>
-            
+
             <div class="grid grid-cols-2 gap-3">
                 <div class="flex flex-col gap-1">
-                    <label for="v_add_year" class="text-xs font-semibold text-muted ml-1">Year</label>
-                    <input type="number" id="v_add_year" required placeholder="e.g. 2022" class="w-full bg-surface border border-divider rounded-xl px-4.5 py-3 text-sm focus:outline-none focus:border-primary transition-all">
+                    <label for="v_add_year" class="text-[11px] font-semibold text-ink uppercase tracking-wider">Model Year</label>
+                    <input type="number" id="v_add_year" required placeholder="e.g. 2022" class="w-full bg-surface border border-divider rounded-xl px-3.5 py-2.5 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all">
                 </div>
                 <div class="flex flex-col gap-1">
-                    <label for="v_add_type" class="text-xs font-semibold text-muted ml-1">Vehicle Type</label>
-                    <select id="v_add_type" class="w-full bg-surface border border-divider rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary transition-all">
+                    <label for="v_add_type" class="text-[11px] font-semibold text-ink uppercase tracking-wider">Vehicle Type</label>
+                    <select id="v_add_type" class="w-full bg-surface border border-divider rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all">
                         <option value="private" selected>Private</option>
                         <option value="commercial">Commercial</option>
                         <option value="psv">PSV (Public Service)</option>
                     </select>
                 </div>
             </div>
-            
-            <div class="flex justify-end gap-3 mt-4">
-                <button type="button" onclick="closeVehicleModal()" class="px-6 py-2.5 rounded-full text-muted hover:bg-surface border border-transparent hover:border-divider/50 transition-colors font-medium text-sm">Cancel</button>
-                <button type="submit" class="magnetic-btn bg-primary text-surface px-6 py-2.5 rounded-full font-medium shadow-sm text-sm">Save Vehicle</button>
+
+            <div class="flex justify-end gap-2.5 mt-2 pt-3 border-t border-divider">
+                <button type="button" onclick="closeVehicleModal()" class="px-4 py-2 rounded-full text-xs font-medium text-muted hover:bg-slate-100 transition-colors">Cancel</button>
+                <button type="submit" class="apple-btn bg-primary hover:bg-primary-dark text-surface px-5 py-2 rounded-full text-xs font-semibold shadow-sm">Save Vehicle</button>
             </div>
         </form>
     </div>
@@ -133,54 +269,28 @@ function closeVehicleModal() {
     const modal = document.getElementById('addVehicleModal');
     modal.classList.remove('flex');
     modal.classList.add('hidden');
-    
     document.getElementById('addVehicleForm').reset();
     document.getElementById('vehicleFormError').classList.add('hidden');
-    
-    const inputs = ['v_owner_id', 'v_reg_number', 'v_add_make', 'v_add_model', 'v_add_year'];
-    inputs.forEach(id => {
-        const input = document.getElementById(id);
-        if (input) {
-            input.classList.remove('border-red-500');
-            input.classList.add('border-divider');
-        }
-    });
 }
 
 async function submitVehicleForm(event) {
     event.preventDefault();
-    
     const errorDiv = document.getElementById('vehicleFormError');
     errorDiv.classList.add('hidden');
-    
+
     const owner_id = document.getElementById('v_owner_id').value;
     const registration_number = document.getElementById('v_reg_number').value.trim();
     const make = document.getElementById('v_add_make').value.trim();
     const model = document.getElementById('v_add_model').value.trim();
     const year = document.getElementById('v_add_year').value.trim();
     const vehicle_type = document.getElementById('v_add_type').value;
-    
-    const inputs = { v_owner_id: owner_id, v_reg_number: registration_number, v_add_make: make, v_add_model: model, v_add_year: year };
-    let hasEmpty = false;
-    
-    for (const [id, val] of Object.entries(inputs)) {
-        const input = document.getElementById(id);
-        if (!val) {
-            input.classList.remove('border-divider');
-            input.classList.add('border-red-500');
-            hasEmpty = true;
-        } else {
-            input.classList.remove('border-red-500');
-            input.classList.add('border-divider');
-        }
-    }
-    
-    if (hasEmpty) {
-        errorDiv.innerText = "Please fill in all vehicle fields.";
+
+    if (!owner_id || !registration_number || !make || !model || !year) {
+        errorDiv.innerText = "Please complete all required fields.";
         errorDiv.classList.remove('hidden');
         return;
     }
-    
+
     try {
         const response = await fetch('/vehicles/api/add', {
             method: 'POST',
@@ -189,24 +299,20 @@ async function submitVehicleForm(event) {
                 'X-CSRFToken': '{{ csrf_token() }}'
             },
             body: JSON.stringify({
-                owner_id: owner_id,
-                registration_number: registration_number,
-                make: make,
-                model: model,
-                year: year,
-                vehicle_type: vehicle_type
+                owner_id, registration_number, make, model, year, vehicle_type
             })
         });
-        
+
         const data = await response.json();
-        if (data.success) {
+        if (response.ok && data.success) {
+            closeVehicleModal();
             window.location.reload();
         } else {
-            errorDiv.innerText = data.error || "An unexpected error occurred.";
+            errorDiv.innerText = data.error || "Failed to register vehicle.";
             errorDiv.classList.remove('hidden');
         }
     } catch (err) {
-        errorDiv.innerText = "Failed to submit request. Please try again.";
+        errorDiv.innerText = "Network error. Unable to establish connection.";
         errorDiv.classList.remove('hidden');
     }
 }

@@ -39,7 +39,8 @@
 
     <!-- Logs Table -->
     <div class="glass rounded-3xl p-1 overflow-hidden">
-        <div class="overflow-x-auto">
+        <!-- Desktop Table -->
+        <div class="hidden md:block overflow-x-auto">
             <table class="w-full text-left border-collapse">
                 <thead>
                     <tr class="border-b border-divider/50 bg-surface/30">
@@ -90,6 +91,37 @@
                     {% endfor %}
                 </tbody>
             </table>
+        </div>
+
+        <!-- Mobile Stacked Card View -->
+        <div class="block md:hidden p-4 space-y-3">
+            {% for log in logs %}
+            <div class="bg-surface/80 rounded-2xl p-4 border border-divider/60 shadow-sm text-xs space-y-2">
+                <div class="flex items-center justify-between">
+                    <span class="px-2 py-0.5 rounded-md font-mono text-[10px] uppercase font-bold bg-ink text-surface">
+                        {{ log.action }}
+                    </span>
+                    <span class="text-muted font-mono text-[10px]">{{ log.timestamp.strftime('%Y-%m-%d %H:%M') if log.timestamp else 'N/A' }}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-muted">Performer:</span>
+                    <span class="text-ink font-bold">{{ log.performer_name or 'System' }}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-muted">Entity:</span>
+                    <span class="font-mono text-ink capitalize">{{ log.entity_type }} ({{ log.entity_id[:8] if log.entity_id else 'N/A' }}...)</span>
+                </div>
+                {% if log.details %}
+                <div class="pt-2 border-t border-divider/40 font-mono text-[11px] text-muted space-y-0.5">
+                    {% for k, v in log.details.items() %}
+                    <div><strong class="text-ink">{{ k }}:</strong> {{ v }}</div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+            {% else %}
+            <div class="py-8 text-center text-muted text-sm">No audit logs found.</div>
+            {% endfor %}
         </div>
     </div>
 </div>
