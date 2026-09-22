@@ -12,3 +12,6 @@ requests==2.34.2
 # shared hosting).
 flask-limiter==4.1.1
 limits==5.8.0
+
+# Required by pymongo for mongodb+srv:// URIs (Atlas / production MONGO_URI)
+dnspython==2.8.0
