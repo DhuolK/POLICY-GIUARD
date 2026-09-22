@@ -55,7 +55,13 @@ class VehicleService:
             else:
                 v['owner_name'] = 'Unknown'
                 
-            policy = db.policies.find_one({"vehicle_id": ObjectId(v['_id']), "status": "published"})
+            # "Active" policy = terminal 'published' state in the code's lowercase
+            # state machine, or legacy data written as 'Active' (case-insensitive
+            # match, mirroring ReminderService.get_expiring_soon_policies).
+            policy = db.policies.find_one({
+                "vehicle_id": ObjectId(v['_id']),
+                "status": {"$regex": "^(active|published)$", "$options": "i"}
+            })
             if policy:
                 v['active_policy'] = policy.get('policy_number')
             else:

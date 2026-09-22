@@ -32,3 +32,12 @@ frontend-design/
 
 # Local database backups
 scripts/backups/
+
+# Academic/working documents and dead-end drafts (kept locally, not deployed)
+useless-maybe/
+Guidelines_text.txt
+Policy guard.docx
+*.docx
+*.doc
+/Logo.png
+/Logo icon.png

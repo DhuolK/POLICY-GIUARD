@@ -1,0 +1,3 @@
+legacy_id,policy_number,client_legacy_id,vehicle_legacy_id,policy_type,status,premium_amount,effective_date,expiry_date,insurance_company,certificate_number
+L-P001,OLD-1001,L-C001,L-V001,comprehensive,Active,45000,2026-01-15,2027-01-14,Jubilee,CERT-001
+L-P002,OLD-1002,L-C002,L-V002,third_party,Active,25000,2026-03-01,2027-02-28,CIC,CERT-002

@@ -1,0 +1,3 @@
+legacy_id,policy_legacy_id,amount,method,status,reference,paid_date
+L-PAY001,L-P001,20000,mpesa,paid,QAB12XYZ,2026-02-10
+L-PAY002,L-P002,25000,cash,paid,CASH-002,2026-03-05

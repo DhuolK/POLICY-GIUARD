@@ -115,9 +115,20 @@ minute with no tracebacks.
 ```bash
 cd ~/policyguard
 flask sms-seed-templates          # DB SMS templates (idempotent)
-python scripts/seed_db.py         # initial admin user / reference data
+python scripts/reset_admin.py     # create THE admin account (prompts for creds)
 python scripts/seed_policy_types.py
 ```
+
+The 56 Kenyan insurers self-seed on first use
+(`InsuranceCompanyService.ensure_seeded()`); underwriters/policy types come
+from `seed_policy_types.py` and the admin UI.
+
+> ⚠️ **NEVER run `scripts/seed_db.py` on production.** It creates demo staff
+> accounts (`worker@policyguard.co.ke`, `worker2@…`) and ~10 fake customers
+> with dummy policies/claims/payments. It exists for local development only.
+> If it is ever run by mistake, `python scripts/reset_transactional_data.py
+> --yes` removes the fake transactional data (keeps reference data + admins),
+> and the demo workers must be removed from Admin → Users.
 
 ## 8. Post-deploy checklist
 
