@@ -1,6 +1,7 @@
-"""SMS engine: outbox, lanes, retry/DLQ, DLR, politeness gates — real Mongo."""
+"""SMS engine: outbox, lanes, retry/DLQ, DLR, politeness gates — SQLite / SQLAlchemy ORM."""
 import copy
 import datetime
+import json
 import sys
 import os
 import unittest
@@ -8,8 +9,9 @@ from unittest.mock import patch
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import pymongo
-
+from app import create_app
+from app.extensions import db
+from app.models import AppSetting, SmsOutbox, SmsSuppression, Notification, AuditLog
 from app.services import sms_engine as engine
 from app.services.sms_engine import (
     PRIORITY_TRANSACTIONAL, PRIORITY_STANDARD, PRIORITY_BULK,
@@ -17,8 +19,6 @@ from app.services.sms_engine import (
 )
 from app.services.sms_service import SmsResult
 from app.services import sms_templates
-
-TEST_DB = 'policy_guard_sms_engine_test'
 
 # 22:30 Nairobi (inside default 21:00–07:00 quiet window).
 QUIET_UTC = datetime.datetime(2026, 1, 5, 19, 30,
@@ -39,39 +39,61 @@ def _transient():
 class Harness(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.client = pymongo.MongoClient('mongodb://localhost:27017')
-        cls.db = cls.client[TEST_DB]
-        p = patch('app.extensions.get_db', return_value=cls.db)
-        p.start()
-        cls.addClassCleanup(p.stop)
+        cls.app = create_app('testing')
+        cls.app.config['WTF_CSRF_ENABLED'] = False
+        cls.app_context = cls.app.app_context()
+        cls.app_context.push()
+
+    @classmethod
+    def tearDownClass(cls):
+        db.session.remove()
+        db.drop_all()
+        cls.app_context.pop()
 
     def setUp(self):
-        for coll in ('sms_outbox', 'sms_suppressions', 'sms_templates',
-                     'app_settings', 'notifications', 'audit_logs'):
-            self.db[coll].delete_many({})
-        # Deterministic gates: quiet hours OFF unless a test says otherwise,
-        # generous frequency cap unless a test says otherwise.
-        self.db.app_settings.insert_one({
-            'key': 'sms_engine',
-            'quiet_hours': {'enabled': False, 'start': '21:00', 'end': '07:00'},
-            'max_sms_per_customer_per_day': 10,
-            'sms_cost_per_segment_kes': 1.0,
-            'max_attempts': 5,
-            'retry_base_delay_seconds': 60,
-            'drain_batch_size': 100,
-            'reconcile_sending_timeout_minutes': 10,
-            'reconcile_sent_stale_hours': 24,
-        })
+        db.drop_all()
+        db.create_all()
+
+        app_set = AppSetting(
+            key='sms_engine',
+            value=json.dumps({
+                'quiet_hours': {'enabled': False, 'start': '21:00', 'end': '07:00'},
+                'max_sms_per_customer_per_day': 10,
+                'sms_cost_per_segment_kes': 1.0,
+                'max_attempts': 5,
+                'retry_base_delay_seconds': 60,
+                'drain_batch_size': 100,
+                'reconcile_sending_timeout_minutes': 10,
+                'reconcile_sent_stale_hours': 24,
+            })
+        )
+        db.session.add(app_set)
+        db.session.commit()
+
+    def tearDown(self):
+        db.session.remove()
 
     def _settings(self, **over):
-        doc = self.db.app_settings.find_one({'key': 'sms_engine'})
-        merged = dict(doc)
-        merged.update(over)
-        self.db.app_settings.replace_one({'key': 'sms_engine'}, merged)
-        return merged
+        app_set = db.session.execute(
+            db.select(AppSetting).where(AppSetting.key == 'sms_engine')
+        ).scalar_one_or_none()
+        current = json.loads(app_set.value) if app_set and app_set.value else {}
+        current.update(over)
+        if app_set:
+            app_set.value = json.dumps(current)
+        else:
+            app_set = AppSetting(key='sms_engine', value=json.dumps(current))
+            db.session.add(app_set)
+        db.session.commit()
+        return current
 
 
 class TestPolitenessGates(Harness):
+    def _as_naive(self, dt_val):
+        if hasattr(dt_val, 'tzinfo') and dt_val.tzinfo:
+            return dt_val.replace(tzinfo=None)
+        return dt_val
+
     def test_quiet_hours_defers_standard(self):
         self._settings(quiet_hours={'enabled': True, 'start': '21:00',
                                     'end': '07:00'})
@@ -81,10 +103,9 @@ class TestPolitenessGates(Harness):
                                      priority=PRIORITY_STANDARD)
         self.assertEqual(doc['status'], 'queued')
         self.assertIsNotNone(doc['next_attempt_at'])
-        naive = doc['next_attempt_at'].replace(tzinfo=None)
+        naive = self._as_naive(doc['next_attempt_at'])
         self.assertGreater(naive, QUIET_UTC.replace(tzinfo=None))
-        # Deferred to 07:00 Nairobi = 04:00 UTC.
-        self.assertEqual(doc['next_attempt_at'].hour, 4)
+        self.assertEqual(naive.hour, 4)
 
     def test_quiet_hours_noon_sends_immediately(self):
         self._settings(quiet_hours={'enabled': True, 'start': '21:00',
@@ -93,7 +114,7 @@ class TestPolitenessGates(Harness):
             self.assertFalse(engine.in_quiet_hours())
             doc = engine.enqueue_sms('+254712345678', 'hi', KIND_RENEWAL,
                                      priority=PRIORITY_STANDARD)
-        self.assertEqual(doc['next_attempt_at'], NOON_UTC)
+        self.assertEqual(self._as_naive(doc['next_attempt_at']), NOON_UTC.replace(tzinfo=None))
 
     def test_transactional_bypasses_quiet_hours(self):
         self._settings(quiet_hours={'enabled': True, 'start': '21:00',
@@ -102,7 +123,7 @@ class TestPolitenessGates(Harness):
             doc = engine.enqueue_sms('+254712345678', 'receipt',
                                      KIND_RECEIPT,
                                      priority=PRIORITY_TRANSACTIONAL)
-        self.assertEqual(doc['next_attempt_at'], QUIET_UTC)
+        self.assertEqual(self._as_naive(doc['next_attempt_at']), QUIET_UTC.replace(tzinfo=None))
 
     def test_opt_out_suppresses_standard_not_transactional(self):
         engine.opt_out('+254712345678', source='test')
@@ -112,7 +133,8 @@ class TestPolitenessGates(Harness):
         txn = engine.enqueue_sms('+254712345678', 'receipt', KIND_RECEIPT,
                                  priority=PRIORITY_TRANSACTIONAL)
         self.assertEqual(txn['status'], 'queued')
-        self.assertTrue(txn['meta'].get('opted_out_bypass'))
+        meta = json.loads(txn['meta']) if isinstance(txn['meta'], str) else txn['meta']
+        self.assertTrue(meta.get('opted_out_bypass'))
 
     def test_inbound_stop_and_start(self):
         res = engine.handle_inbound('+254712345678', 'STOP')
@@ -127,14 +149,13 @@ class TestPolitenessGates(Harness):
         with patch.object(engine, '_utcnow', return_value=NOON_UTC):
             first = engine.enqueue_sms('+254712345678', 'one', KIND_RENEWAL)
             second = engine.enqueue_sms('+254712345678', 'two', KIND_RENEWAL)
-        self.assertEqual(first['next_attempt_at'], NOON_UTC)
+        self.assertEqual(self._as_naive(first['next_attempt_at']), NOON_UTC.replace(tzinfo=None))
         self.assertEqual(second.get('deferred_reason'), 'frequency_cap')
         self.assertGreater(second['next_attempt_at'], first['next_attempt_at'])
-        # Manual staff action jumps the queue.
         with patch.object(engine, '_utcnow', return_value=NOON_UTC):
             manual = engine.enqueue_sms('+254712345678', 'three',
                                         KIND_RENEWAL, force=True)
-        self.assertEqual(manual['next_attempt_at'], NOON_UTC)
+        self.assertEqual(self._as_naive(manual['next_attempt_at']), NOON_UTC.replace(tzinfo=None))
 
     def test_invalid_number_never_queues(self):
         doc = engine.enqueue_sms('not-a-number', 'hi', KIND_RENEWAL)
@@ -147,9 +168,10 @@ class TestPolitenessGates(Harness):
         b = engine.enqueue_sms('+254712345678', 'hi again', KIND_RENEWAL,
                                idempotency_key='dup:1')
         self.assertEqual(a['_id'], b['_id'])
-        self.assertEqual(
-            self.db.sms_outbox.count_documents(
-                {'idempotency_key': 'dup:1'}), 1)
+        cnt = db.session.execute(
+            db.select(db.func.count(SmsOutbox.id)).where(SmsOutbox.idempotency_key == 'dup:1')
+        ).scalar()
+        self.assertEqual(cnt, 1)
 
 
 class TestDrainRetryDlq(Harness):
@@ -176,24 +198,24 @@ class TestDrainRetryDlq(Harness):
             doc = engine.enqueue_sms('+254712345678', 'hi', KIND_RENEWAL,
                                      force=True)
             s1 = engine.drain_outbox()
-            mid = self.db.sms_outbox.find_one({'_id': doc['_id']})
-            # Fast-forward past the backoff, drain again → DLQ.
-            self.db.sms_outbox.update_one(
-                {'_id': doc['_id']},
-                {'$set': {'next_attempt_at': NOON_UTC}})
+            mid = db.session.get(SmsOutbox, int(doc['_id']))
+            mid.next_attempt_at = NOON_UTC
+            db.session.commit()
+
             with patch.object(engine, '_utcnow',
                               return_value=NOON_UTC + datetime.timedelta(hours=1)):
                 s2 = engine.drain_outbox()
-            final = self.db.sms_outbox.find_one({'_id': doc['_id']})
+            final = db.session.get(SmsOutbox, int(doc['_id']))
         self.assertEqual(s1['retried'], 1)
-        self.assertEqual(mid['status'], 'failed')
-        self.assertEqual(mid['attempts'], 1)
+        self.assertEqual(mid.status, 'failed')
+        self.assertEqual(mid.attempts, 1)
         self.assertEqual(s2['dead'], 1)
-        self.assertEqual(final['status'], 'dead')
-        self.assertEqual(final['dead_reason'], 'retries_exhausted')
-        # DLQ arrivals page staff.
-        self.assertTrue(self.db.notifications.count_documents(
-            {'category': 'sms_failed'}) >= 1)
+        self.assertEqual(final.status, 'dead')
+        self.assertEqual(final.dead_reason, 'retries_exhausted')
+        notif_cnt = db.session.execute(
+            db.select(db.func.count(Notification.id)).where(Notification.category == 'sms_failed')
+        ).scalar()
+        self.assertGreaterEqual(notif_cnt, 1)
 
     def test_permanent_failure_never_retried(self):
         bad = SmsResult(False, status='InvalidPhoneNumber',
@@ -202,10 +224,10 @@ class TestDrainRetryDlq(Harness):
             doc = engine.enqueue_sms('+254712345678', 'hi', KIND_RENEWAL,
                                      force=True)
             summary = engine.drain_outbox()
-            final = self.db.sms_outbox.find_one({'_id': doc['_id']})
+            final = db.session.get(SmsOutbox, int(doc['_id']))
         self.assertEqual(summary['dead'], 1)
-        self.assertEqual(final['attempts'], 1)
-        self.assertEqual(final['dead_reason'], 'permanent')
+        self.assertEqual(final.attempts, 1)
+        self.assertEqual(final.dead_reason, 'permanent')
 
     def test_cost_recorded_on_send(self):
         self._settings(sms_cost_per_segment_kes=2.0)
@@ -214,9 +236,9 @@ class TestDrainRetryDlq(Harness):
                                      KIND_RECEIPT,
                                      priority=PRIORITY_TRANSACTIONAL)
             engine.drain_outbox()
-            final = self.db.sms_outbox.find_one({'_id': doc['_id']})
-        self.assertEqual(final['segments'], 2)
-        self.assertEqual(final['cost_kes'], 4.0)
+            final = db.session.get(SmsOutbox, int(doc['_id']))
+        self.assertEqual(final.segments, 2)
+        self.assertEqual(final.cost_kes, 4.0)
         summary = engine.sms_cost_summary(days=1)
         self.assertGreaterEqual(summary['total']['spend_kes'], 4.0)
 
@@ -226,32 +248,36 @@ class TestDrainRetryDlq(Harness):
             doc = engine.enqueue_sms('+254712345678', 'hi', KIND_RENEWAL,
                                      force=True)
             summary = engine.drain_outbox()
-            final = self.db.sms_outbox.find_one({'_id': doc['_id']})
+            final = db.session.get(SmsOutbox, int(doc['_id']))
         self.assertEqual(summary['simulated'], 1)
-        self.assertEqual(final['status'], 'delivered')
+        self.assertEqual(final.status, 'delivered')
 
 
 class TestDlrAndReconcile(Harness):
     def _sent_doc(self, ref, **over):
-        base = dict(
+        item = SmsOutbox(
             idempotency_key=f'dlr:{ref}', kind=KIND_RENEWAL,
             priority=PRIORITY_STANDARD, destination='+254712345678',
+            phone_number='+254712345678',
             message='hi', status='sent', attempts=1,
             provider_ref=ref, provider_status='Sent', simulated=False,
             sent_at=NOON_UTC, created_at=NOON_UTC, updated_at=NOON_UTC,
-            next_attempt_at=None)
-        base.update(over)
-        return self.db.sms_outbox.insert_one(base).inserted_id
+            next_attempt_at=None
+        )
+        for k, v in over.items():
+            setattr(item, k, v)
+        db.session.add(item)
+        db.session.commit()
+        return item.id
 
     def test_dlr_delivered(self):
         oid = self._sent_doc('ATX_D1')
         res = engine.handle_delivery_report('ATX_D1', 'Delivered',
                                             phone='+254712345678')
         self.assertEqual(res, {'matched': True, 'outcome': 'delivered'})
-        doc = self.db.sms_outbox.find_one({'_id': oid})
-        self.assertEqual(doc['status'], 'delivered')
-        self.assertIsNotNone(doc['delivered_at'])
-        # Repeat DLR is a no-op.
+        doc = db.session.get(SmsOutbox, oid)
+        self.assertEqual(doc.status, 'delivered')
+        self.assertIsNotNone(doc.delivered_at)
         res2 = engine.handle_delivery_report('ATX_D1', 'Delivered')
         self.assertEqual(res2['outcome'], 'already_delivered')
 
@@ -260,9 +286,9 @@ class TestDlrAndReconcile(Harness):
         res = engine.handle_delivery_report('ATX_F1', 'Failed',
                                             failure_reason='No route')
         self.assertEqual(res['outcome'], 'dead')
-        doc = self.db.sms_outbox.find_one({'_id': oid})
-        self.assertEqual(doc['status'], 'dead')
-        self.assertEqual(doc['dead_reason'], 'dlr:Failed')
+        doc = db.session.get(SmsOutbox, oid)
+        self.assertEqual(doc.status, 'dead')
+        self.assertEqual(doc.dead_reason, 'dlr:Failed')
 
     def test_dlr_unknown_ref(self):
         self.assertEqual(engine.handle_delivery_report('NOPE', 'Delivered'),
@@ -270,17 +296,23 @@ class TestDlrAndReconcile(Harness):
 
     def test_reconcile_reclaims_stuck_sending(self):
         old = NOON_UTC - datetime.timedelta(minutes=30)
-        oid = self.db.sms_outbox.insert_one(dict(
+        item = SmsOutbox(
             idempotency_key='stuck:1', kind=KIND_RENEWAL,
             priority=PRIORITY_STANDARD, destination='+254712345678',
+            phone_number='+254712345678',
             message='hi', status='sending', attempts=1,
             created_at=old, updated_at=old,
-            next_attempt_at=old)).inserted_id
+            next_attempt_at=old
+        )
+        db.session.add(item)
+        db.session.commit()
+        oid = item.id
+
         with patch.object(engine, '_utcnow', return_value=NOON_UTC):
             res = engine.reconcile_stuck()
         self.assertEqual(res['reclaimed_sending'], 1)
-        doc = self.db.sms_outbox.find_one({'_id': oid})
-        self.assertEqual(doc['status'], 'failed')
+        doc = db.session.get(SmsOutbox, oid)
+        self.assertEqual(doc.status, 'failed')
 
     def test_reconcile_dead_letters_stale_sent(self):
         old = NOON_UTC - datetime.timedelta(hours=30)
@@ -290,25 +322,31 @@ class TestDlrAndReconcile(Harness):
         with patch.object(engine, '_utcnow', return_value=NOON_UTC):
             res = engine.reconcile_stuck()
         self.assertEqual(res['dlr_timed_out'], 1)
-        doc = self.db.sms_outbox.find_one({'_id': oid})
-        self.assertEqual(doc['status'], 'dead')
-        self.assertEqual(doc['dead_reason'], 'dlr-timeout')
-        sim = self.db.sms_outbox.find_one({'_id': sim_oid})
-        self.assertEqual(sim['status'], 'delivered')
+        doc = db.session.get(SmsOutbox, oid)
+        self.assertEqual(doc.status, 'dead')
+        self.assertEqual(doc.dead_reason, 'dlr-timeout')
+        sim = db.session.get(SmsOutbox, sim_oid)
+        self.assertEqual(sim.status, 'delivered')
 
     def test_requeue_dead(self):
-        oid = self.db.sms_outbox.insert_one(dict(
+        item = SmsOutbox(
             idempotency_key='dead:1', kind=KIND_BROADCAST,
             priority=PRIORITY_BULK, destination='+254712345678',
+            phone_number='+254712345678',
             message='hi', status='dead', attempts=5,
             dead_reason='retries_exhausted',
             created_at=NOON_UTC, updated_at=NOON_UTC,
-            next_attempt_at=None)).inserted_id
+            next_attempt_at=None
+        )
+        db.session.add(item)
+        db.session.commit()
+        oid = item.id
+
         moved = engine.requeue_dead([str(oid)])
         self.assertEqual(moved, 1)
-        doc = self.db.sms_outbox.find_one({'_id': oid})
-        self.assertEqual(doc['status'], 'queued')
-        self.assertEqual(doc['attempts'], 0)
+        doc = db.session.get(SmsOutbox, oid)
+        self.assertEqual(doc.status, 'queued')
+        self.assertEqual(doc.attempts, 0)
 
 
 class TestTemplates(Harness):
@@ -342,10 +380,8 @@ class TestTemplates(Harness):
 
 class TestSchedulerTick(Harness):
     def test_tick_on_empty_db_is_quiet_zeros(self):
-        from app.services import reminder_service as rs
         from app.services.sms_engine import run_scheduler_tick
-        with patch.object(rs, 'get_db', return_value=self.db):
-            summary = run_scheduler_tick()
+        summary = run_scheduler_tick()
         self.assertEqual(summary['staff_sent'], 0)
         self.assertEqual(summary['sms_sent'], 0)
         self.assertEqual(summary['drained']['processed'], 0)

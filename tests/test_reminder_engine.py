@@ -1,35 +1,31 @@
-"""Reminder engine v2: dual dispatch, offsets, dedupe — against real Mongo."""
+"""Reminder engine v2: dual dispatch, offsets, dedupe — against SQLite / SQLAlchemy ORM."""
 import unittest
 import sys
 import os
 import datetime
+import json
+from datetime import timezone
 from unittest.mock import patch
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import pymongo
-from bson import ObjectId
-
+from app import create_app
+from app.extensions import db
+from app.models import User, Policy, Reminder, Notification, AppSetting, SmsOutbox, SmsSuppression
 from app.services import reminder_service as rs
 from app.services.reminder_service import ReminderService
 from app.services import notification_service as ns
 from app.services import audit_service
-from app.services import sms_service
-
-TEST_DB = 'policy_guard_reminder_engine_test'
 
 
 class Harness(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.client = pymongo.MongoClient('mongodb://localhost:27017')
-        cls.db = cls.client[TEST_DB]
+        cls.app = create_app('testing')
+        cls.app.config['WTF_CSRF_ENABLED'] = False
+        cls.app_context = cls.app.app_context()
+        cls.app_context.push()
 
-        # Route every service's DB handle into the throwaway database.
-        rs.get_db = lambda: cls.db
-        ext_patch = patch('app.extensions.get_db', return_value=cls.db)
-        ext_patch.start()
-        cls.addClassCleanup(ext_patch.stop)
         audit_service.AuditService.log_action = staticmethod(lambda **kw: None)
 
         envpatch = patch.dict(os.environ,
@@ -39,86 +35,105 @@ class Harness(unittest.TestCase):
         envpatch.start()
         cls.addClassCleanup(envpatch.stop)
 
-        cls._seed()
-
     @classmethod
-    def _seed(cls):
-        d = cls.db
-        for coll in ('users', 'policies', 'reminders', 'notifications',
-                     'app_settings', 'sms_outbox', 'sms_suppressions',
-                     'sms_templates'):
-            d[coll].delete_many({})
-        d.app_settings.drop()  # force defaults
-        # Deterministic engine gates: no quiet-hour defers, generous cap.
-        d.app_settings.insert_one({
-            'key': 'sms_engine',
-            'quiet_hours': {'enabled': False, 'start': '21:00', 'end': '07:00'},
-            'max_sms_per_customer_per_day': 10,
-            'sms_cost_per_segment_kes': 1.0,
-            'max_attempts': 5,
-            'retry_base_delay_seconds': 60,
-            'drain_batch_size': 100,
-        })
+    def tearDownClass(cls):
+        db.session.remove()
+        db.drop_all()
+        cls.app_context.pop()
 
-        cls.admin_id = d.users.insert_one(
-            {'role': 'admin', 'email': 'a@a.co'}).inserted_id
-        cls.c_phone = d.users.insert_one(
-            {'role': 'customer', 'full_name': 'John Phone',
-             'phone': '0712345678'}).inserted_id
-        cls.c_nophone = d.users.insert_one(
-            {'role': 'customer', 'full_name': 'No Phone',
-             'phone': ''}).inserted_id
+    def setUp(self):
+        db.drop_all()
+        db.create_all()
+        self._seed()
+
+    def tearDown(self):
+        db.session.remove()
+
+    def _seed(self):
+        app_set = AppSetting(
+            key='sms_engine',
+            value=json.dumps({
+                'quiet_hours': {'enabled': False, 'start': '21:00', 'end': '07:00'},
+                'max_sms_per_customer_per_day': 10,
+                'sms_cost_per_segment_kes': 1.0,
+                'max_attempts': 5,
+                'retry_base_delay_seconds': 60,
+                'drain_batch_size': 100,
+            })
+        )
+        db.session.add(app_set)
+
+        admin = User(role='admin', email='a@a.co')
+        c_phone = User(role='customer', full_name='John Phone', phone='0712345678')
+        c_nophone = User(role='customer', full_name='No Phone', phone='')
+        db.session.add_all([admin, c_phone, c_nophone])
+        db.session.commit()
+
+        self.admin_id = admin.id
+        self.c_phone_id = c_phone.id
+        self.c_nophone_id = c_nophone.id
+
+        today = datetime.datetime.now(timezone.utc).date()
 
         def pol(number, offset, client_id):
-            return d.policies.insert_one({
-                'policy_number': number, 'status': 'published',
-                'policy_type': 'Motor',
-                'client_id': client_id,
-                'expiry_date': (datetime.datetime.utcnow().date()
-                                + datetime.timedelta(days=offset)).isoformat(),
-            }).inserted_id
+            p = Policy(
+                policy_number=number,
+                status='published',
+                policy_type='Motor',
+                client_id=client_id,
+                expiry_date=(today + datetime.timedelta(days=offset)).isoformat()
+            )
+            db.session.add(p)
+            db.session.commit()
+            return p.id
 
-        cls.p_sms_ok = pol('WL-SMS-OK', 3, cls.c_phone)      # both legs fire
-        cls.p_no_phone = pol('WL-NOPHONE', 3, cls.c_nophone)  # staff error only
-        cls.p_staff_only = pol('WL-STAFF-ONLY', 7, cls.c_phone)  # bell only
-        cls.p_out_of_band = pol('WL-OFFSET-5', 5, cls.c_phone)   # nothing fires
+        self.p_sms_ok = pol('WL-SMS-OK', 3, self.c_phone_id)      # both legs fire
+        self.p_no_phone = pol('WL-NOPHONE', 3, self.c_nophone_id)  # staff error only
+        self.p_staff_only = pol('WL-STAFF-ONLY', 7, self.c_phone_id)  # bell only
+        self.p_out_of_band = pol('WL-OFFSET-5', 5, self.c_phone_id)   # nothing fires
 
 
 class TestReminderEngine(Harness):
     def test_01_first_run_dispatches_both_legs_once(self):
         stats = ReminderService.run_due_reminders(user_id=self.admin_id)
-        # Bell fires for EVERY policy hitting an offset (incl. the phoneless
-        # one); the SMS leg succeeds for one and fails for the other.
         self.assertEqual(stats['staff_sent'], 3)
         self.assertEqual(stats['sms_sent'], 1)     # WL-SMS-OK
         self.assertEqual(stats['sms_failed'], 1)   # WL-NOPHONE
 
-        cats = [n['category'] for n in self.db.notifications.find()]
+        notifs = db.session.execute(db.select(Notification)).scalars().all()
+        cats = [n.category for n in notifs]
         self.assertEqual(cats.count(ns.CATEGORY_REMINDER), 3)
         self.assertEqual(cats.count(ns.CATEGORY_SMS_SUCCESS), 1)
         self.assertEqual(cats.count(ns.CATEGORY_PHONE_MISSING), 1)
 
-        jobs = list(self.db.reminders.find())
-        kinds = [j['kind'] for j in jobs]
+        jobs = db.session.execute(db.select(Reminder)).scalars().all()
+        kinds = [j.kind for j in jobs]
         self.assertEqual(kinds.count(rs.KIND_STAFF_NOTICE), 3)
         self.assertEqual(kinds.count(rs.KIND_CUSTOMER_SMS), 2)
 
-        failed = self.db.reminders.find_one(
-            {'policy_id': self.p_no_phone, 'kind': rs.KIND_CUSTOMER_SMS})
-        self.assertEqual(failed['status'], 'failed')
+        failed = db.session.execute(
+            db.select(Reminder).where(
+                Reminder.policy_id == self.p_no_phone,
+                Reminder.kind == rs.KIND_CUSTOMER_SMS
+            )
+        ).scalar_one()
+        self.assertEqual(failed.status, 'failed')
 
-        # Offset-5 policy produced NO jobs at all.
-        self.assertEqual(self.db.reminders.count_documents(
-            {'policy_id': self.p_out_of_band}), 0)
+        out_of_band_jobs = db.session.execute(
+            db.select(Reminder).where(Reminder.policy_id == self.p_out_of_band)
+        ).scalars().all()
+        self.assertEqual(len(out_of_band_jobs), 0)
 
     def test_02_second_run_is_a_complete_noop(self):
-        before_jobs = self.db.reminders.count_documents({})
-        before_notifs = self.db.notifications.count_documents({})
+        before_jobs = db.session.execute(db.select(db.func.count(Reminder.id))).scalar()
+        before_notifs = db.session.execute(db.select(db.func.count(Notification.id))).scalar()
         stats = ReminderService.run_due_reminders(user_id=self.admin_id)
         self.assertEqual(stats, {'staff_sent': 0, 'sms_sent': 0, 'sms_failed': 0,
                                  'sms_suppressed': 0, 'sms_retrying': 0})
-        self.assertEqual(self.db.reminders.count_documents({}), before_jobs)
-        self.assertEqual(self.db.notifications.count_documents({}), before_notifs)
+        after_jobs = db.session.execute(db.select(db.func.count(Reminder.id))).scalar()
+        after_notifs = db.session.execute(db.select(db.func.count(Notification.id))).scalar()
+        self.assertEqual(after_jobs, before_jobs)
+        self.assertEqual(after_notifs, before_notifs)
 
     def test_03_settings_are_seeded_with_westlake_defaults(self):
         s = ReminderService.get_reminder_settings()
@@ -129,20 +144,21 @@ class TestReminderEngine(Harness):
         ok, err = ReminderService.send_manual_reminder(str(self.p_sms_ok),
                                                        user_id=self.admin_id)
         self.assertTrue(ok, err)
-        manuals = list(self.db.reminders.find(
-            {'policy_id': self.p_sms_ok, 'manual': True}))
+        manuals = db.session.execute(
+            db.select(Reminder).where(
+                Reminder.policy_id == self.p_sms_ok,
+                Reminder.manual == True
+            )
+        ).scalars().all()
         self.assertGreaterEqual(len(manuals), 1)
-        self.assertIsNone(manuals[-1].get('offset_days'))
+        self.assertIsNone(manuals[-1].offset_days)
 
     def test_05_expiring_view_attaches_e164_and_status(self):
         rows = {r['policy_number']: r for r in
                 ReminderService.get_expiring_soon_policies(user=None)}
-        # The VIEW lists everything within 180 days (offset-5 included),
-        # regardless of whether the engine has an action at that offset.
         self.assertIn('WL-OFFSET-5', rows)
         self.assertEqual(rows['WL-SMS-OK']['client_phone_e164'], '+254712345678')
         self.assertIsNone(rows['WL-NOPHONE']['client_phone_e164'])
-        # Reminder display state reflects the customer-SMS leg.
         self.assertEqual(rows['WL-SMS-OK']['reminder_status'], 'Simulated')
 
 

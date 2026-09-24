@@ -8,17 +8,21 @@ from bson import ObjectId
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app import create_app
+from app.extensions import db
 
 class TestPolicyExtendRoute(unittest.TestCase):
     def setUp(self):
-        self.app = create_app('default')
+        self.app = create_app('testing')
         self.app.config['TESTING'] = True
         self.app.config['WTF_CSRF_ENABLED'] = False
-        self.client = self.app.test_client()
         self.app_context = self.app.app_context()
         self.app_context.push()
+        db.create_all()
+        self.client = self.app.test_client()
 
     def tearDown(self):
+        db.session.remove()
+        db.drop_all()
         self.app_context.pop()
 
     @patch('flask_login.utils._get_user')

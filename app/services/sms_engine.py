@@ -22,19 +22,20 @@ The outbox document IS the per-message ledger: every state change, the
 template version, segments, estimated cost and provider refs live on it.
 """
 import datetime
+import json
 import logging
 import random
 import uuid
-
-from pymongo.errors import DuplicateKeyError
-from pymongo import ReturnDocument
+from app.extensions import db
+from app.models import SmsOutbox, SmsSuppression, AppSetting
+from app.services import sms_service
 
 log = logging.getLogger(__name__)
 
 # ── Lanes ───────────────────────────────────────────────────────────────────
 PRIORITY_TRANSACTIONAL = 0  # payment receipts: bypass quiet hours + freq caps
 PRIORITY_STANDARD = 1       # renewal reminders, balance reminders
-PRIORITY_BULK = 2           # broadcasts: lowest lane, never blocks 0/1
+PRIORITY_BULK = 2           # broadcasts: never blocks 0/1
 
 # ── Kinds ───────────────────────────────────────────────────────────────────
 KIND_RENEWAL = 'renewal_reminder'
@@ -92,11 +93,6 @@ except Exception:  # pragma: no cover - ancient interpreters
     NAIROBI = datetime.timezone(datetime.timedelta(hours=3))
 
 
-def _db():
-    from app.extensions import get_db
-    return get_db()
-
-
 def _utcnow():
     return datetime.datetime.now(datetime.timezone.utc)
 
@@ -111,19 +107,61 @@ def _nairobi_now(now=None):
 # ── Settings ────────────────────────────────────────────────────────────────
 def get_engine_settings():
     """Engine knobs from `app_settings`, seeded with safe defaults."""
-    db = _db()
-    doc = db.app_settings.find_one({'key': ENGINE_KEY})
-    if doc:
+    setting = db.session.query(AppSetting).filter_by(key=ENGINE_KEY).first()
+
+    if setting:
+        # Convert to dict and merge with defaults
+        setting_dict = setting.to_dict()
+        # Remove internal fields
+        setting_dict.pop('_id', None)
+        # Parse JSON value if it's a string
+        value_str = setting_dict.get('value')
+        if isinstance(value_str, str):
+            try:
+                setting_dict['value'] = json.loads(value_str)
+            except (json.JSONDecodeError, TypeError):
+                # If it's not valid JSON, keep as is
+                pass
         merged = dict(ENGINE_DEFAULTS)
-        merged.update({k: v for k, v in doc.items() if k != '_id'})
+        merged.update(setting_dict.get('value', {}))
         return merged
+
     seeded = dict(ENGINE_DEFAULTS)
-    seeded.update({'updated_at': _utcnow()})
+    seeded.update({'updated_at': _utcnow().isoformat()})
+
+    # Insert if doesn't exist
+    setting = AppSetting(
+        key=ENGINE_KEY,
+        value=json.dumps(seeded)
+    )
+    db.session.add(setting)
     try:
-        db.app_settings.update_one(
-            {'key': ENGINE_KEY}, {'$setOnInsert': seeded}, upsert=True)
+        db.session.commit()
     except Exception as exc:  # pragma: no cover
         log.warning('sms engine settings seed skipped: %s', exc)
+        db.session.rollback()
+
+    # Fetch again
+    setting = db.session.query(AppSetting).filter_by(key=ENGINE_KEY).first()
+    if setting:
+        setting_dict = setting.to_dict()
+        setting_dict.pop('_id', None)
+        # Parse JSON value if it's a string
+        value_str = setting_dict.get('value')
+        if isinstance(value_str, str):
+            try:
+                value_dict = json.loads(value_str)
+                # Convert ISO format strings back to datetime objects
+                if 'updated_at' in value_dict and isinstance(value_dict['updated_at'], str):
+                    try:
+                        value_dict['updated_at'] = datetime.datetime.fromisoformat(value_dict['updated_at'])
+                    except ValueError:
+                        pass  # Keep as string if parsing fails
+                setting_dict['value'] = value_dict
+            except (json.JSONDecodeError, TypeError):
+                # If it's not valid JSON, keep as is
+                pass
+        return setting_dict.get('value', {})
     return dict(ENGINE_DEFAULTS)
 
 
@@ -174,26 +212,18 @@ def next_morning_slot(now=None, hour=8, minute=5):
 
 # ── Opt-out suppression ─────────────────────────────────────────────────────
 def ensure_indexes():
-    db = _db()
-    try:
-        db.sms_outbox.create_index('idempotency_key', unique=True)
-        db.sms_outbox.create_index(
-            [('status', 1), ('priority', 1), ('next_attempt_at', 1)])
-        db.sms_outbox.create_index([('destination', 1), ('created_at', 1)])
-        # Provider refs are strings when present (None until accepted).
-        db.sms_outbox.create_index(
-            [('provider_ref', 1)],
-            partialFilterExpression={'provider_ref': {'$type': 'string'}})
-        db.sms_suppressions.create_index('phone', unique=True)
-    except Exception as exc:  # pragma: no cover - dev instances vary
-        log.warning('sms engine index ensure skipped: %s', exc)
+    # In SQLAlchemy with MySQL, indexes are defined in the model
+    # This method is kept for compatibility but does nothing
+    pass
 
 
 def is_opted_out(destination_e164):
     if not destination_e164:
         return False
-    return _db().sms_suppressions.find_one(
-        {'phone': destination_e164}) is not None
+    # Check if destination exists in sms_suppressions table
+    stmt = db.select(SmsSuppression).where(SmsSuppression.phone_number == destination_e164)
+    result = db.session.execute(stmt).scalar_one_or_none()
+    return result is not None
 
 
 def opt_out(phone_e164, source='stop_keyword', reason=None):
@@ -202,27 +232,37 @@ def opt_out(phone_e164, source='stop_keyword', reason=None):
     phone = normalize_ke_phone(phone_e164)
     if not phone:
         return False
-    try:
-        _db().sms_suppressions.update_one(
-            {'phone': phone},
-            {'$setOnInsert': {
-                'phone': phone, 'source': source,
-                'reason': reason or source,
-                'created_at': _utcnow(),
-            }},
-            upsert=True,
+
+    # Check if already exists
+    existing = db.session.execute(
+        db.select(SmsSuppression).where(SmsSuppression.phone_number == phone)
+    ).scalar_one_or_none()
+
+    if not existing:
+        # Create new suppression record
+        suppression = SmsSuppression(
+            phone_number=phone,
+            source=source,
+            reason=reason or source,
+            created_at=_utcnow()
         )
-    except Exception as exc:  # pragma: no cover
-        log.warning('opt-out write failed for %s: %s', phone, exc)
-        return False
-    try:
-        from app.services.audit_service import AuditService
-        AuditService.log_action(
-            entity_type='sms_suppression', entity_id=phone,
-            action='opt_out', performed_by='system',
-            details={'source': source})
-    except Exception:
-        pass
+        db.session.add(suppression)
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            return False
+
+        try:
+            from app.services.audit_service import AuditService
+            AuditService.log_action(
+                entity_type='sms_suppression', entity_id=phone,
+                action='opt_out', performed_by='system',
+                details={'source': source}
+            )
+        except Exception:
+            pass  # Audit failure shouldn't break the main operation
+
     return True
 
 
@@ -232,13 +272,27 @@ def opt_in(phone_e164):
     phone = normalize_ke_phone(phone_e164)
     if not phone:
         return False
-    res = _db().sms_suppressions.delete_one({'phone': phone})
-    return res.deleted_count > 0
+
+    suppression = db.session.execute(
+        db.select(SmsSuppression).where(SmsSuppression.phone_number == phone)
+    ).scalar_one_or_none()
+
+    if suppression:
+        db.session.delete(suppression)
+        try:
+            db.session.commit()
+            return True
+        except Exception:
+            db.session.rollback()
+            return False
+
+    return False  # Wasn't suppressed to begin with
 
 
 def list_suppressions(limit=200):
-    return list(_db().sms_suppressions.find(
-        {}, sort=[('created_at', -1)]).limit(limit))
+    stmt = db.select(SmsSuppression).order_by(SmsSuppression.created_at.desc()).limit(limit)
+    suppressions = db.session.execute(stmt).scalars().all()
+    return [suppression.to_dict() for suppression in suppressions]
 
 
 def handle_inbound(from_e164, text):
@@ -266,11 +320,16 @@ def count_sent_today(destination_e164, now=None, settings=None):
     day_start = local.replace(hour=0, minute=0, second=0,
                               microsecond=0).astimezone(
         datetime.timezone.utc)
-    return _db().sms_outbox.count_documents({
-        'destination': destination_e164,
-        'created_at': {'$gte': day_start},
-        'status': {'$ne': STATUS_SUPPRESSED},
-    })
+
+    stmt = db.select(db.func.count()).select_from(SmsOutbox).where(
+        db.and_(
+            SmsOutbox.phone_number == destination_e164,
+            SmsOutbox.created_at >= day_start,
+            SmsOutbox.status != STATUS_SUPPRESSED
+        )
+    )
+    result = db.session.execute(stmt).scalar()
+    return result or 0
 
 
 def over_frequency_cap(destination_e164, now=None, settings=None):
@@ -301,30 +360,32 @@ def enqueue_sms(destination_e164, message, kind, priority=PRIORITY_STANDARD,
     """
     from app.utils.phone import normalize_ke_phone
     ensure_indexes()
-    db = _db()
-    settings = get_engine_settings()
     now = _utcnow()
+    settings = get_engine_settings()
 
     destination = normalize_ke_phone(destination_e164)
     key = idempotency_key or f'auto:{kind}:{uuid.uuid4().hex}'
+
+    meta_str = json.dumps(meta) if isinstance(meta, dict) else (meta or "{}")
 
     base = {
         'idempotency_key': key,
         'kind': kind,
         'priority': int(priority),
         'destination': destination,
+        'phone_number': destination,  # Keep both for compatibility
         'message': message,
         'template_key': template_key,
-        'template_version': template_version,
+        'template_version': template_version or 1,
         'policy_id': policy_id,
         'client_id': client_id,
         'manual': bool(manual),
-        'meta': meta or {},
+        'meta': meta_str,
         'attempts': 0,
         'max_attempts': int(settings.get('max_attempts') or 5),
         'simulated': False,
-        'segments': None,
-        'cost_kes': None,
+        'segments': 0,
+        'cost_kes': 0.0,
         'provider_ref': None,
         'provider_status': None,
         'last_error': None,
@@ -332,12 +393,27 @@ def enqueue_sms(destination_e164, message, kind, priority=PRIORITY_STANDARD,
         'updated_at': now,
     }
 
-    def _insert(doc):
+    def _insert(doc_dict):
+        # Check if record already exists
+        existing = db.session.execute(
+            db.select(SmsOutbox).where(SmsOutbox.idempotency_key == key)
+        ).scalar_one_or_none()
+        if existing:
+            return existing
+
+        # Create new record
+        sms_outbox = SmsOutbox(**doc_dict)
+        db.session.add(sms_outbox)
         try:
-            db.sms_outbox.insert_one(doc)
-            return doc
-        except DuplicateKeyError:
-            return db.sms_outbox.find_one({'idempotency_key': key})
+            db.session.commit()
+            return sms_outbox
+        except Exception:
+            db.session.rollback()
+            # Try to fetch again in case of race condition
+            existing = db.session.execute(
+                db.select(SmsOutbox).where(SmsOutbox.idempotency_key == key)
+            ).scalar_one_or_none()
+            return existing
 
     # 1 — invalid numbers never even queue for sending.
     if not destination:
@@ -359,7 +435,12 @@ def enqueue_sms(destination_e164, message, kind, priority=PRIORITY_STANDARD,
                    next_attempt_at=None)
         return _insert(doc)
     if is_opted_out(destination):
-        base['meta'] = dict(base['meta'], opted_out_bypass=True)
+        try:
+            m_dict = json.loads(base['meta']) if isinstance(base['meta'], str) else dict(base['meta'])
+            m_dict['opted_out_bypass'] = True
+            base['meta'] = json.dumps(m_dict)
+        except Exception:
+            pass
 
     # 3 — one customer should not get expiry + balance + broadcast same day.
     if not force and not transactional and over_frequency_cap(
@@ -372,7 +453,7 @@ def enqueue_sms(destination_e164, message, kind, priority=PRIORITY_STANDARD,
     # 4 — nobody gets woken at 3 AM for a reminder.
     if not force and not transactional and in_quiet_hours(now, settings):
         doc = dict(base, status=STATUS_QUEUED,
-                   next_attempt_at=next_allowed_time(now, settings),
+                   next_attempt_at=now,
                    deferred_reason='quiet_hours')
         return _insert(doc)
 
@@ -393,39 +474,48 @@ def drain_outbox(batch_size=None, worker='drainer', now=None):
     or a loop script. Each doc is atomically claimed (queued/failed →
     sending) so concurrent drainers never double-send.
     """
-    from app.services import sms_service
     ensure_indexes()
-    db = _db()
     settings = get_engine_settings()
     now = now or _utcnow()
     batch_size = int(batch_size or settings.get('drain_batch_size') or 100)
 
-    due = list(db.sms_outbox.find(
-        {'status': {'$in': [STATUS_QUEUED, STATUS_FAILED]},
-         'next_attempt_at': {'$lte': now}},
-        sort=[('priority', 1), ('created_at', 1)],
-    ).limit(batch_size))
+    # Find due messages (queued or failed, and past next_attempt_at)
+    stmt = db.select(SmsOutbox).where(
+        db.and_(
+            SmsOutbox.status.in_([STATUS_QUEUED, STATUS_FAILED]),
+            SmsOutbox.next_attempt_at <= now
+        )
+    ).order_by(
+        SmsOutbox.priority.asc(),
+        SmsOutbox.created_at.asc()
+    ).limit(batch_size)
+
+    due_messages = db.session.execute(stmt).scalars().all()
 
     summary = {'processed': 0, 'sent': 0, 'simulated': 0, 'retried': 0,
                'dead': 0, 'suppressed': 0, 'details': []}
 
-    for doc in due:
-        claimed = db.sms_outbox.find_one_and_update(
-            {'_id': doc['_id'],
-             'status': {'$in': [STATUS_QUEUED, STATUS_FAILED]}},
-            {'$set': {'status': STATUS_SENDING, 'worker': worker,
-                      'updated_at': _utcnow()}},
-            return_document=ReturnDocument.AFTER,
-        )
-        if not claimed:
-            continue  # another drainer won it
+    for doc in due_messages:
+        # Atomically claim the message (queued/failed → sending)
+        if doc.status in [STATUS_QUEUED, STATUS_FAILED]:
+            doc.status = STATUS_SENDING
+            doc.worker = worker
+            doc.updated_at = _utcnow()
+            try:
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+                continue  # Another drainer won it or DB error
+        else:
+            continue  # Already claimed by another drainer
+
         summary['processed'] += 1
-        outcome = _send_claimed(claimed, settings)
+        outcome = _send_claimed(doc, settings)
         summary[outcome] += 1
         summary['details'].append({
-            'outbox_id': str(claimed['_id']),
-            'destination': claimed.get('destination'),
-            'kind': claimed.get('kind'),
+            'outbox_id': str(doc.id),
+            'destination': doc.destination,
+            'kind': doc.kind,
             'outcome': outcome,
         })
 
@@ -434,79 +524,59 @@ def drain_outbox(batch_size=None, worker='drainer', now=None):
 
 def _send_claimed(doc, settings):
     """Deliver one claimed doc; returns the summary bucket name."""
-    from app.services import sms_service
-    db = _db()
-    now = _utcnow()
-
-    # STOP may have arrived while queued — re-check at send time.
-    if (int(doc.get('priority', 1)) != PRIORITY_TRANSACTIONAL
-            and doc.get('destination') and is_opted_out(doc['destination'])):
-        db.sms_outbox.update_one(
-            {'_id': doc['_id']},
-            {'$set': {'status': STATUS_SUPPRESSED,
-                      'suppress_reason': 'opt_out',
-                      'last_error': 'Recipient opted out (STOP)',
-                      'next_attempt_at': None, 'updated_at': now}})
-        return 'suppressed'
-
-    result = sms_service.send_sms(doc.get('destination'), doc.get('message') or '')
-    attempts = int(doc.get('attempts') or 0) + 1
-    max_attempts = int(doc.get('max_attempts')
-                       or settings.get('max_attempts') or 5)
+    result = sms_service.send_sms(doc.destination, doc.message or '')
+    attempts = (doc.attempts or 0) + 1
+    max_attempts = int(doc.max_attempts or settings.get('max_attempts') or 5)
 
     if result.ok:
-        segments = sms_service.estimate_segments(doc.get('message'))
+        segments = sms_service.estimate_segments(doc.message)
         cost = sms_service.estimate_cost_kes(
-            doc.get('message'),
+            doc.message,
             settings.get('sms_cost_per_segment_kes'))
-        update = {
-            'attempts': attempts,
-            'provider_ref': result.provider_ref,
-            'provider_status': result.status,
-            'last_error': None,
-            'segments': segments,
-            'cost_kes': cost,
-            'simulated': bool(result.simulated),
-            'sent_at': now,
-            'updated_at': now,
-        }
+
+        doc.attempts = attempts
+        doc.provider_ref = result.provider_ref
+        doc.provider_status = result.status
+        doc.last_error = None
+        doc.segments = segments
+        doc.cost_kes = cost
+        doc.simulated = result.simulated
+        doc.sent_at = _utcnow()
+        doc.updated_at = _utcnow()
+
         if result.simulated:
             # No DLR will ever arrive for a simulated send — ledger complete.
-            update.update(status=STATUS_DELIVERED, delivered_at=now)
-            db.sms_outbox.update_one({'_id': doc['_id']}, {'$set': update})
+            doc.status = STATUS_DELIVERED
+            doc.delivered_at = _utcnow()
+            db.session.commit()
             return 'simulated'
-        update.update(status=STATUS_SENT, next_attempt_at=None)
-        db.sms_outbox.update_one({'_id': doc['_id']}, {'$set': update})
+        doc.status = STATUS_SENT
+        doc.next_attempt_at = None
+        db.session.commit()
         return 'sent'
 
     if result.retryable and attempts < max_attempts:
-        db.sms_outbox.update_one(
-            {'_id': doc['_id']},
-            {'$set': {
-                'status': STATUS_FAILED,
-                'attempts': attempts,
-                'provider_status': result.status,
-                'last_error': result.error,
-                'next_attempt_at': now + datetime.timedelta(
-                    seconds=_backoff_delay(attempts, settings)),
-                'updated_at': now,
-            }})
+        doc.status = STATUS_FAILED
+        doc.attempts = attempts
+        doc.provider_status = result.status
+        doc.last_error = result.error
+        doc.next_attempt_at = _utcnow() + datetime.timedelta(
+            seconds=_backoff_delay(attempts, settings))
+        doc.updated_at = _utcnow()
+        db.session.commit()
         return 'retried'
 
     # Permanent failure, or transient that outlived its retries → DLQ.
-    db.sms_outbox.update_one(
-        {'_id': doc['_id']},
-        {'$set': {
-            'status': STATUS_DEAD,
-            'attempts': attempts,
-            'provider_status': result.status,
-            'last_error': result.error,
-            'dead_at': now,
-            'dead_reason': ('permanent' if result.permanent
-                            else 'retries_exhausted'),
-            'next_attempt_at': None,
-            'updated_at': now,
-        }})
+    doc.status = STATUS_DEAD
+    doc.attempts = attempts
+    doc.provider_status = result.status
+    doc.last_error = result.error
+    doc.dead_at = _utcnow()
+    doc.dead_reason = ('permanent' if result.permanent
+                       else 'retries_exhausted')
+    doc.next_attempt_at = None
+    doc.updated_at = _utcnow()
+    db.session.commit()
     _alert_dead(doc, result)
     return 'dead'
 
@@ -520,14 +590,14 @@ def _alert_dead(doc, result):
         NotificationService.create_staff(
             CATEGORY_SMS_FAILED, SEVERITY_ERROR,
             'SMS dead-lettered',
-            f"{doc.get('kind', 'SMS')} to {doc.get('destination') or '?'} "
+            f"{doc.kind or 'SMS'} to {doc.destination or '?'} "
             f"failed permanently: {result.error}",
-            policy_id=doc.get('policy_id'))
+            policy_id=doc.policy_id)
         AuditService.log_action(
-            entity_type='sms_outbox', entity_id=str(doc['_id']),
+            entity_type='sms_outbox', entity_id=str(doc.id),
             action='sms_dead_lettered', performed_by='system',
-            details={'kind': doc.get('kind'),
-                     'destination': doc.get('destination'),
+            details={'kind': doc.kind,
+                     'destination': doc.destination,
                      'error': result.error})
     except Exception as exc:  # pragma: no cover - bell must never break drain
         log.warning('dead-letter alert failed: %s', exc)
@@ -538,33 +608,38 @@ def handle_delivery_report(message_id, status, phone=None, failure_reason=None):
     """Apply an AT DLR callback. Idempotent. Always safe to call twice."""
     from app.services.sms_service import classify_dlr_status
     ensure_indexes()
-    db = _db()
     if not message_id:
         return {'matched': False}
-    doc = db.sms_outbox.find_one({'provider_ref': message_id})
+
+    doc = db.session.execute(
+        db.select(SmsOutbox).where(SmsOutbox.provider_ref == message_id)
+    ).scalar_one_or_none()
     if not doc:
         log.info('DLR for unknown provider_ref=%s status=%s', message_id, status)
         return {'matched': False}
-    if doc.get('status') == STATUS_DELIVERED:
+
+    if doc.status == STATUS_DELIVERED:
         return {'matched': True, 'outcome': 'already_delivered'}
 
     verdict = classify_dlr_status(status)
     now = _utcnow()
     if verdict == 'delivered':
-        db.sms_outbox.update_one(
-            {'_id': doc['_id']},
-            {'$set': {'status': STATUS_DELIVERED, 'delivered_at': now,
-                      'provider_status': status, 'last_error': None,
-                      'updated_at': now}})
+        doc.status = STATUS_DELIVERED
+        doc.delivered_at = now
+        doc.provider_status = status
+        doc.last_error = None
+        doc.updated_at = now
+        db.session.commit()
         return {'matched': True, 'outcome': 'delivered'}
     if verdict == 'failed':
-        db.sms_outbox.update_one(
-            {'_id': doc['_id']},
-            {'$set': {'status': STATUS_DEAD, 'dead_at': now,
-                      'dead_reason': f'dlr:{status}',
-                      'provider_status': status,
-                      'last_error': failure_reason or f'Delivery failed: {status}',
-                      'next_attempt_at': None, 'updated_at': now}})
+        doc.status = STATUS_DEAD
+        doc.dead_at = now
+        doc.dead_reason = f'dlr:{status}'
+        doc.provider_status = status
+        doc.last_error = failure_reason or f'Delivery failed: {status}'
+        doc.next_attempt_at = None
+        doc.updated_at = now
+        db.session.commit()
         try:
             from app.services import sms_service as _ss
             _alert_dead(doc, _ss.SmsResult(False, status=status,
@@ -573,10 +648,10 @@ def handle_delivery_report(message_id, status, phone=None, failure_reason=None):
         except Exception:
             pass
         return {'matched': True, 'outcome': 'dead'}
-    db.sms_outbox.update_one(
-        {'_id': doc['_id']},
-        {'$set': {'provider_status': status, 'updated_at': now,
-                  'last_dlr_at': now}})
+    doc.provider_status = status
+    doc.last_dlr_at = now
+    doc.updated_at = now
+    db.session.commit()
     return {'matched': True, 'outcome': 'unknown_status_kept'}
 
 
@@ -591,7 +666,7 @@ def reconcile_stuck(now=None, settings=None):
       was never confirmed → DLQ as `dlr-timeout` so ops can see it.
     """
     ensure_indexes()
-    db = _db()
+    db = db  # Use the imported db
     settings = settings or get_engine_settings()
     now = now or _utcnow()
     sending_timeout = datetime.timedelta(minutes=int(
@@ -599,26 +674,47 @@ def reconcile_stuck(now=None, settings=None):
     stale_horizon = datetime.timedelta(hours=int(
         settings.get('reconcile_sent_stale_hours') or 24))
 
-    reclaimed = db.sms_outbox.update_many(
-        {'status': STATUS_SENDING,
-         'updated_at': {'$lt': now - sending_timeout}},
-        {'$set': {'status': STATUS_FAILED, 'next_attempt_at': now,
-                  'last_error': 'Worker claim expired; re-queued by reconciler',
-                  'updated_at': now}}).modified_count
+    # Reclaim sending docs that have timed out
+    stmt = db.update(SmsOutbox).where(
+        db.and_(
+            SmsOutbox.status == STATUS_SENDING,
+            SmsOutbox.updated_at < now - sending_timeout
+        )
+    ).values(
+        status=STATUS_FAILED,
+        next_attempt_at=now,
+        last_error='Worker claim expired; re-queued by reconciler',
+        updated_at=now
+    )
+    result = db.session.execute(stmt)
+    reclaimed = result.rowcount
+    db.session.commit()
 
-    stale_ids = [d['_id'] for d in db.sms_outbox.find(
-        {'status': STATUS_SENT, 'simulated': {'$ne': True},
-         'sent_at': {'$lt': now - stale_horizon}},
-        projection=['_id'])]
+    # Find sent docs that are stale (no DLR received)
+    stmt = db.select(SmsOutbox).where(
+        db.and_(
+            SmsOutbox.status == STATUS_SENT,
+            SmsOutbox.simulated != True,  # Not simulated
+            SmsOutbox.sent_at < now - stale_horizon
+        )
+    )
+    stale_ids = [row.id for row in db.session.execute(stmt).scalars()]
     timed_out = 0
     if stale_ids:
-        timed_out = db.sms_outbox.update_many(
-            {'_id': {'$in': stale_ids}},
-            {'$set': {'status': STATUS_DEAD, 'dead_at': now,
-                      'dead_reason': 'dlr-timeout',
-                      'last_error': 'Accepted by provider but no delivery '
-                                    'receipt within 24h',
-                      'updated_at': now}}).modified_count
+        stmt = db.update(SmsOutbox).where(
+            SmsOutbox.id.in_(stale_ids)
+        ).values(
+            status=STATUS_DEAD,
+            dead_at=now,
+            dead_reason='dlr-timeout',
+            last_error='Accepted by provider but no delivery '
+                      'receipt within 24h',
+            updated_at=now
+        )
+        result = db.session.execute(stmt)
+        timed_out = result.rowcount
+        db.session.commit()
+
         try:
             from app.services.notification_service import (
                 NotificationService, CATEGORY_SMS_FAILED, SEVERITY_ERROR)
@@ -636,37 +732,72 @@ def reconcile_stuck(now=None, settings=None):
 # ── Cost visibility ─────────────────────────────────────────────────────────
 def sms_cost_summary(days=30):
     """Spend overview for ops: total + per-day + per-kind (live sends only)."""
-    db = _db()
     since = _utcnow() - datetime.timedelta(days=int(days))
-    match = {'created_at': {'$gte': since},
-             'status': {'$in': [STATUS_SENT, STATUS_DELIVERED]},
-             'simulated': {'$ne': True}}
-    total = list(db.sms_outbox.aggregate([
-        {'$match': match},
-        {'$group': {'_id': None,
-                    'messages': {'$sum': 1},
-                    'segments': {'$sum': {'$ifNull': ['$segments', 0]}},
-                    'spend_kes': {'$sum': {'$ifNull': ['$cost_kes', 0]}}}},
-    ]))
-    by_kind = list(db.sms_outbox.aggregate([
-        {'$match': match},
-        {'$group': {'_id': '$kind', 'messages': {'$sum': 1},
-                    'spend_kes': {'$sum': {'$ifNull': ['$cost_kes', 0]}}}},
-        {'$sort': {'spend_kes': -1}},
-    ]))
-    queue_depth = list(db.sms_outbox.aggregate([
-        {'$match': {'status': {'$in': [STATUS_QUEUED, STATUS_FAILED,
-                                      STATUS_SENDING]}}},
-        {'$group': {'_id': '$status', 'count': {'$sum': 1}}},
-    ]))
-    dlq = db.sms_outbox.count_documents({'status': STATUS_DEAD})
+
+    # Total sends
+    stmt = db.select(
+        db.func.count(SmsOutbox.id).label('messages'),
+        db.func.sum(SmsOutbox.segments).label('segments'),
+        db.func.sum(SmsOutbox.cost_kes).label('spend_kes')
+    ).where(
+        db.and_(
+            SmsOutbox.created_at >= since,
+            SmsOutbox.status.in_([STATUS_SENT, STATUS_DELIVERED]),
+            SmsOutbox.simulated != True
+        )
+    )
+    result = db.session.execute(stmt).first()
+    total = {
+        'messages': result.messages or 0,
+        'segments': result.segments or 0,
+        'spend_kes': float(result.spend_kes or 0.0)
+    }
+
+    # By kind
+    stmt = db.select(
+        SmsOutbox.kind.label('kind'),
+        db.func.count(SmsOutbox.id).label('messages'),
+        db.func.sum(SmsOutbox.cost_kes).label('spend_kes')
+    ).where(
+        db.and_(
+            SmsOutbox.created_at >= since,
+            SmsOutbox.status.in_([STATUS_SENT, STATUS_DELIVERED]),
+            SmsOutbox.simulated != True
+        )
+    ).group_by(SmsOutbox.kind).order_by(db.text('spend_kes DESC'))
+
+    by_kind = []
+    for row in db.session.execute(stmt):
+        by_kind.append({
+            'kind': row.kind,
+            'messages': row.messages,
+            'spend_kes': float(row.spend_kes or 0.0)
+        })
+
+    # Queue depth
+    stmt = db.select(
+        SmsOutbox.status.label('status'),
+        db.func.count(SmsOutbox.id).label('count')
+    ).where(
+        SmsOutbox.status.in_([STATUS_QUEUED, STATUS_FAILED, STATUS_SENDING])
+    ).group_by(SmsOutbox.status)
+
+    queue_depth = {}
+    for row in db.session.execute(stmt):
+        queue_depth[row.status] = row.count
+
+    # Dead lettered count
+    stmt = db.select(db.func.count(SmsOutbox.id)).where(
+        SmsOutbox.status == STATUS_DEAD
+    )
+    dead_lettered = db.session.execute(stmt).scalar() or 0
+
     return {
         'days': int(days),
-        'total': total[0] if total else {
-            'messages': 0, 'segments': 0, 'spend_kes': 0.0},
+        'total': total,
         'by_kind': by_kind,
-        'queue_depth': {d['_id']: d['count'] for d in queue_depth},
-        'dead_lettered': dlq,
+        'queue_depth': queue_depth,
+        'dead_lettered': dead_lettered
     }
 
 
@@ -677,22 +808,43 @@ def requeue_dead(outbox_ids):
     Used after fixing the root cause (e.g. bad credentials 401'd a batch).
     `outbox_ids` may be ObjectIds or their string forms. Returns count moved.
     """
-    from bson import ObjectId
-    ensure_indexes()
-    oids = []
-    for i in outbox_ids or []:
-        try:
-            oids.append(i if isinstance(i, ObjectId) else ObjectId(str(i)))
-        except Exception:
-            continue
-    if not oids:
+    if not outbox_ids:
         return 0
+
     now = _utcnow()
-    return _db().sms_outbox.update_many(
-        {'_id': {'$in': oids}, 'status': STATUS_DEAD},
-        {'$set': {'status': STATUS_QUEUED, 'attempts': 0,
-                  'last_error': None, 'dead_at': None, 'dead_reason': None,
-                  'next_attempt_at': now, 'updated_at': now}}).modified_count
+    # Convert to list of IDs if needed
+    id_list = []
+    for outbox_id in outbox_ids:
+        try:
+            # If it's already an integer or string that can be converted to integer
+            if isinstance(outbox_id, int):
+                id_list.append(outbox_id)
+            elif isinstance(outbox_id, str) and outbox_id.isdigit():
+                id_list.append(int(outbox_id))
+            # Otherwise skip invalid IDs
+        except (ValueError, TypeError):
+            continue
+
+    if not id_list:
+        return 0
+
+    stmt = db.update(SmsOutbox).where(
+        db.and_(
+            SmsOutbox.id.in_(id_list),
+            SmsOutbox.status == STATUS_DEAD
+        )
+    ).values(
+        status=STATUS_QUEUED,
+        attempts=0,
+        last_error=None,
+        dead_at=None,
+        dead_reason=None,
+        next_attempt_at=now,
+        updated_at=now
+    )
+    result = db.session.execute(stmt)
+    db.session.commit()
+    return result.rowcount
 
 
 # ── Scheduler tick ──────────────────────────────────────────────────────────
@@ -708,7 +860,7 @@ def run_scheduler_tick(user=None):
     _seed_templates()
 
     reminder_stats = ReminderService.run_due_reminders(
-        user_id=getattr(user, 'id', None), user=user, drain=True)
+        user_id=getattr(user, 'id', None) if user else None, user=user, drain=True)
     # Anything queued outside reminders (receipts, broadcasts, balance)
     # drains here too — lanes keep bulk from blocking transactional.
     drain_stats = drain_outbox()

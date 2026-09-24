@@ -19,6 +19,19 @@ INSECURE_SECRET_KEYS = {
 
 class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY', 'default-secret-key')
+
+    # ─── Database Configuration (MySQL / SQLAlchemy) ────────────────
+    SQLALCHEMY_DATABASE_URI = os.environ.get(
+        'SQLALCHEMY_DATABASE_URI',
+        os.environ.get('DATABASE_URL', 'mysql+pymysql://root:@localhost/policy_guard')
+    )
+    # Automatic fallback for local SQLite if specified via SQLALCHEMY_DATABASE_URI=sqlite:///policy_guard.db
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        'pool_recycle': int(os.environ.get('DB_POOL_RECYCLE', 280)),  # Avoid MySQL server has gone away on shared hosting
+        'pool_pre_ping': True,
+    }
+
     MONGO_URI = os.environ.get('MONGO_URI', 'mongodb://localhost:27017/')
     MONGO_DB_NAME = os.environ.get('MONGO_DB_NAME', 'policy_guard')
     # pymongo's default server-selection timeout is 30s: with Mongo down, every
@@ -109,6 +122,8 @@ class TestingConfig(Config):
     DEBUG = True
     TESTING = True
     WTF_CSRF_ENABLED = False
+    # Use an SQLite database for testing to avoid external dependencies
+    SQLALCHEMY_DATABASE_URI = 'sqlite:///test_policy_guard.db'
     # Tests must not depend on MongoDB-backed rate-limit counters; the
     # hardening harness re-enables the limiter explicitly where it tests it.
     RATELIMIT_ENABLED = False

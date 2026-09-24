@@ -1,92 +1,113 @@
 import re
 import datetime
-from bson import ObjectId
-from app.extensions import get_db
+from app.extensions import db
+from app.models import Vehicle, User
 from ..utils.visibility import visible_client_ids, ROLE_CUSTOMER
+
 
 class VehicleService:
     @staticmethod
     def get_vehicles(vehicle_type=None, search_query=None, user=None):
         """Vehicles are scoped through their owner: a worker sees a vehicle only
         when they may see the client that owns it."""
-        db = get_db()
-        query = {}
+        # Base query: vehicles with joined owner info
+        stmt = db.select(Vehicle).join(User, Vehicle.owner_id == User.id).where(User.role == ROLE_CUSTOMER)
 
+        # Apply visibility scoping - owners that the user can see
         owner_ids = visible_client_ids(user)
         if owner_ids is not None:
-            query["owner_id"] = {"$in": owner_ids}
-        if vehicle_type:
-            query["vehicle_type"] = vehicle_type
+            if not owner_ids:
+                return []  # no visible vehicles
+            stmt = stmt.where(Vehicle.owner_id.in_(owner_ids))
 
+        # Apply vehicle type filter
+        if vehicle_type:
+            stmt = stmt.where(Vehicle.vehicle_type == vehicle_type)
+
+        # Apply search query
         if search_query:
             search_query = search_query.strip()
+            search_term = f"%{search_query}%"
 
             # 1. Find matching owners (Users with role='customer') by name or client_id
-            owner_search = {
-                "role": ROLE_CUSTOMER,
-                "$or": [
-                    {"full_name": {"$regex": re.escape(search_query), "$options": "i"}},
-                    {"client_id": {"$regex": re.escape(search_query), "$options": "i"}}
-                ]
-            }
+            owner_stmt = db.select(User.id).where(
+                User.role == ROLE_CUSTOMER,
+                db.or_(
+                    User.full_name.ilike(search_term),
+                    User.client_id.ilike(search_term),
+                )
+            )
             if owner_ids is not None:
-                owner_search["_id"] = {"$in": owner_ids}
-            matching_users = list(db.users.find(owner_search, {"_id": 1}))
-            user_ids = [u['_id'] for u in matching_users]
+                owner_stmt = owner_stmt.where(User.id.in_(owner_ids))
+
+            matching_owner_ids = [row[0] for row in db.session.execute(owner_stmt)]
 
             # 2. Query vehicles matching vehicle fields OR matching owner IDs.
-            # Kept as a sibling key (not a replacement) so the owner scope above
-            # still applies — Mongo ANDs top-level keys.
-            query["$or"] = [
-                {"registration_number": {"$regex": re.escape(search_query), "$options": "i"}},
-                {"make": {"$regex": re.escape(search_query), "$options": "i"}},
-                {"model": {"$regex": re.escape(search_query), "$options": "i"}},
-                {"owner_id": {"$in": user_ids}}
-            ]
+            # In SQL, we keep the owner scope AND add the search conditions
+            vehicle_search_conditions = db.or_(
+                Vehicle.registration_number.ilike(search_term),
+                Vehicle.make.ilike(search_term),
+                Vehicle.model.ilike(search_term),
+                Vehicle.owner_id.in_(matching_owner_ids)
+            )
 
-        vehicles = list(db.vehicles.find(query).sort("created_at", -1))
-        
-        # Populate owner names and active policies
-        for v in vehicles:
-            v['_id'] = str(v['_id'])
-            if v.get('owner_id'):
-                owner = db.users.find_one({"_id": v['owner_id']})
-                v['owner_name'] = owner.get('full_name') if owner else 'Unknown'
+            # Apply search conditions while preserving owner scope
+            stmt = stmt.where(vehicle_search_conditions)
+
+        # Order by most recent first
+        stmt = stmt.order_by(Vehicle.created_at.desc())
+
+        vehicles = db.session.execute(stmt).scalars().all()
+
+        # Populate owner names and active policies (for compatibility)
+        result = []
+        for vehicle in vehicles:
+            vehicle_dict = vehicle.to_dict()
+            vehicle_dict['_id'] = str(vehicle.id)  # For compatibility
+
+            # Owner name
+            if vehicle.owner:
+                vehicle_dict['owner_name'] = vehicle.owner.full_name
             else:
-                v['owner_name'] = 'Unknown'
-                
-            # "Active" policy = terminal 'published' state in the code's lowercase
-            # state machine, or legacy data written as 'Active' (case-insensitive
-            # match, mirroring ReminderService.get_expiring_soon_policies).
-            policy = db.policies.find_one({
-                "vehicle_id": ObjectId(v['_id']),
-                "status": {"$regex": "^(active|published)$", "$options": "i"}
-            })
-            if policy:
-                v['active_policy'] = policy.get('policy_number')
-            else:
-                v['active_policy'] = 'None'
-                
-        return vehicles
+                vehicle_dict['owner_name'] = 'Unknown'
+
+            # Active policy
+            active_policy = None
+            for policy in vehicle.policies:
+                if policy.status and policy.status.lower() in ('active', 'published'):
+                    active_policy = policy.policy_number
+                    break
+            vehicle_dict['active_policy'] = active_policy if active_policy else 'None'
+
+            result.append(vehicle_dict)
+
+        return result
 
     @staticmethod
     def add_vehicle(owner_id, registration_number, make, model, year, vehicle_type, session=None):
-        db = get_db()
-        
-        existing = db.vehicles.find_one({"registration_number": registration_number}, session=session)
+        # Note: session parameter ignored for SQLAlchemy
+
+        # Check for existing vehicle registration
+        existing = db.session.execute(
+            db.select(Vehicle).where(Vehicle.registration_number == registration_number)
+        ).scalar_one_or_none()
         if existing:
             return None, "Vehicle with this registration already exists"
-            
-        vehicle_data = {
-            "owner_id": ObjectId(owner_id),
-            "registration_number": registration_number,
-            "make": make,
-            "model": model,
-            "year": int(year) if year else None,
-            "vehicle_type": vehicle_type,
-            "created_at": datetime.datetime.utcnow()
-        }
-        
-        result = db.vehicles.insert_one(vehicle_data, session=session)
-        vehicle_data['_id'] = str(result.inserted_id)
-        return vehicle_data, None
+
+        vehicle = Vehicle(
+            owner_id=owner_id,
+            registration_number=registration_number,
+            make=make,
+            model=model,
+            year=int(year) if year else None,
+            vehicle_type=vehicle_type,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+
+        db.session.add(vehicle)
+        db.session.commit()
+
+        vehicle_dict = vehicle.to_dict()
+        vehicle_dict['_id'] = str(vehicle.id)  # For compatibility
+        return vehicle_dict, None

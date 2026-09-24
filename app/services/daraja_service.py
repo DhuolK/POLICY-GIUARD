@@ -3,9 +3,10 @@ import re
 import base64
 import time
 import datetime
+import json
 import requests
-from bson import ObjectId
-from app.extensions import get_db
+from app.extensions import db
+from app.models import MpesaTransaction, Policy, User
 
 
 class DarajaService:
@@ -159,35 +160,37 @@ class DarajaService:
         Cascade: exact policy number (case-insensitive) -> client phone
         match on the sender MSISDN -> None (suspense queue).
         """
-        db = get_db()
         ref = (bill_ref or "").strip()
         if ref:
-            policy = db.policies.find_one(
-                {"policy_number": {"$regex": f"^{re.escape(ref)}$", "$options": "i"}})
-            if policy and policy.get("client_id"):
-                return policy["client_id"], policy["_id"]
+            policy = db.session.execute(
+                db.select(Policy).where(
+                    db.func.lower(Policy.policy_number) == ref.lower()
+                )
+            ).scalar_one_or_none()
+            if policy and policy.client_id:
+                return policy.client_id, policy.id  # Return (client_id, policy_id)
         phone = cls.format_phone_number(msisdn)
         if phone:
             short = phone[3:]  # last 9 digits; stored phones vary in format
-            client = db.users.find_one({
-                "role": "customer",
-                "$or": [
-                    {"phone": phone},
-                    {"phone": {"$regex": f"{short}$"}},
-                ],
-            })
+            client = db.session.execute(
+                db.select(User).where(
+                    User.role == 'customer',
+                    db.or_(
+                        User.phone == phone,
+                        User.phone.endswith(short)
+                    )
+                )
+            ).scalars().first()
             if client:
-                return client["_id"], None
+                return client.id, None
         return None, None
 
     # ------------------------------------------------------- C2B confirm --
     @classmethod
     def _ensure_indexes(cls):
-        db = get_db()
-        try:
-            db.mpesa_transactions.create_index("trans_id", unique=True, sparse=True)
-        except Exception:
-            pass
+        # In SQLAlchemy with MySQL, indexes are defined in the model
+        # This method is kept for compatibility but does nothing
+        pass
 
     @classmethod
     def process_c2b_confirmation(cls, payload: dict) -> dict:
@@ -195,7 +198,6 @@ class DarajaService:
         from app.services.payment_service import PaymentService
 
         cls._ensure_indexes()
-        db = get_db()
         now = datetime.datetime.now(datetime.timezone.utc)
 
         trans_id = str(payload.get("TransID", "") or "").strip()
@@ -223,31 +225,43 @@ class DarajaService:
         msisdn = cls.format_phone_number(payload.get("MSISDN", ""))
         trans_time = str(payload.get("TransTime", "") or "")
 
-        existing = db.mpesa_transactions.find_one({"trans_id": trans_id})
-        if existing and existing.get("status") in ("CONFIRMED", "ALLOCATED"):
+        existing = db.session.execute(
+            db.select(MpesaTransaction).where(MpesaTransaction.trans_id == trans_id)
+        ).scalar_one_or_none()
+        if existing and existing.status in ("CONFIRMED", "ALLOCATED"):
             return {"status": "already_processed", "receipt": trans_id}
 
         client_oid, policy_oid = cls.match_reference(bill_ref, msisdn)
 
-        tx_doc = {
-            "channel": "C2B",
+        # Parse trans_time format "YYYYMMDDHHMMSS" or fallback to now
+        tt_dt = now
+        if len(trans_time) == 14:
+            try:
+                tt_dt = datetime.datetime.strptime(trans_time, "%Y%m%d%H%M%S").replace(tzinfo=datetime.timezone.utc)
+            except Exception:
+                pass
+
+        # Prepare kwargs matching MpesaTransaction model columns
+        tx_kwargs = {
             "trans_id": trans_id,
+            "trans_time": tt_dt,
             "trans_amount": trans_amount,
+            "business_short_code": str(payload.get("BusinessShortCode", "0")),
             "bill_ref_number": bill_ref,
             "msisdn": msisdn,
-            "trans_time": trans_time,
-            "business_shortcode": str(payload.get("BusinessShortCode", "")),
-            "org_balance": str(payload.get("OrgAccountBalance", "")),
-            "raw_callback": payload,
-            "created_at": now,
-            "updated_at": now,
+            "first_name": str(payload.get("FirstName", "")),
+            "middle_name": str(payload.get("MiddleName", "")),
+            "last_name": str(payload.get("LastName", "")),
+            "raw_payload": json.dumps(payload),
+            "created_at": now
         }
 
         if client_oid is None:
-            tx_doc.update({"status": "UNALLOCATED", "client_id": None,
-                           "policy_id": None})
-            db.mpesa_transactions.update_one(
-                {"trans_id": trans_id}, {"$set": tx_doc}, upsert=True)
+            tx_kwargs["status"] = "UNALLOCATED"
+            mpesa_tx = MpesaTransaction(**tx_kwargs)
+            db.session.add(mpesa_tx)
+            db.session.commit()
+
             from app.services.notification_service import (
                 NotificationService, CATEGORY_SYSTEM, SEVERITY_WARNING)
             NotificationService.create_staff(
@@ -266,22 +280,29 @@ class DarajaService:
             description=f"Paybill {trans_id} ref {bill_ref}",
             extra={"c2b_trans_id": trans_id, "bill_ref_number": bill_ref},
         )
-        tx_doc.update({"status": "ALLOCATED", "client_id": client_oid,
-                       "policy_id": policy_oid,
-                       "receipt_id": ObjectId(receipt["_id"]),
-                       "receipt_number": receipt["receipt_number"]})
-        db.mpesa_transactions.update_one(
-            {"trans_id": trans_id}, {"$set": tx_doc}, upsert=True)
+        tx_kwargs["status"] = "ALLOCATED"
+
+        # Update or create the transaction
+        mpesa_tx = db.session.execute(
+            db.select(MpesaTransaction).where(MpesaTransaction.trans_id == trans_id)
+        ).scalar_one_or_none()
+        if mpesa_tx:
+            for key, value in tx_kwargs.items():
+                setattr(mpesa_tx, key, value)
+        else:
+            mpesa_tx = MpesaTransaction(**tx_kwargs)
+            db.session.add(mpesa_tx)
+        db.session.commit()
 
         from .audit_service import AuditService
         AuditService.log_action(
             entity_type="payment",
-            entity_id=receipt["_id"],
+            entity_id=receipt.get('_id') or receipt.get('id'),
             action="paybill_c2b_confirmed",
             performed_by="system",
             details={"trans_id": trans_id, "amount": trans_amount,
                      "bill_ref": bill_ref,
-                     "receipt": receipt["receipt_number"]},
+                     "receipt": receipt.get('receipt_number')},
         )
         try:
             # Transactional lane: enqueue only (this webhook must answer
@@ -292,8 +313,8 @@ class DarajaService:
             from app.services.sms_service import payment_receipt_message
             from app.services.sms_templates import render as render_template, KEY_RECEIPT
             from app.utils.phone import normalize_ke_phone
-            client = db.users.find_one({"_id": ObjectId(client_oid)})
-            dest = normalize_ke_phone(client.get("phone")) if client else None
+            client = db.session.get(User, client_oid)
+            dest = normalize_ke_phone(client.phone) if client and client.phone else None
             if dest:
                 balance = PaymentService.client_balance_due(client_oid)
                 try:
@@ -325,7 +346,7 @@ class DarajaService:
         except Exception:
             pass
 
-        return {"status": "allocated", "receipt": receipt["receipt_number"],
+        return {"status": "allocated", "receipt": receipt.get('receipt_number') if isinstance(receipt, dict) else getattr(receipt, 'receipt_number', None),
                 "amount": trans_amount}
 
     @classmethod
@@ -334,111 +355,160 @@ class DarajaService:
         """Manually attach an UNALLOCATED confirmation to a customer."""
         from app.services.payment_service import PaymentService
 
-        db = get_db()
-        tx = db.mpesa_transactions.find_one({"trans_id": trans_id})
-        if not tx:
+        mpesa_tx = db.session.execute(
+            db.select(MpesaTransaction).where(MpesaTransaction.trans_id == trans_id)
+        ).scalar_one_or_none()
+        if not mpesa_tx:
             return {"success": False, "message": "Paybill transaction not found."}
-        if tx.get("status") == "ALLOCATED":
+        if mpesa_tx.status == "ALLOCATED":
             return {"success": False, "message": "Already allocated."}
+
         try:
-            client_oid = ObjectId(client_id)
-        except Exception:
+            client_oid = int(client_id)
+        except (ValueError, TypeError):
             return {"success": False, "message": "Invalid customer."}
-        if not db.users.find_one({"_id": client_oid, "role": "customer"}):
+
+        client = db.session.get(User, client_oid)
+        if not client or client.role != 'customer':
             return {"success": False, "message": "Customer not found."}
+
         policy_oid = None
         if policy_id:
             try:
-                policy_oid = ObjectId(policy_id)
-            except Exception:
+                policy_oid = int(policy_id)
+                policy = db.session.get(Policy, policy_oid)
+                if not policy:
+                    return {"success": False, "message": "Invalid policy."}
+            except (ValueError, TypeError):
                 return {"success": False, "message": "Invalid policy."}
 
         receipt = PaymentService.allocate_payment(
             client_id=client_oid,
-            amount=float(tx.get("trans_amount") or 0),
+            amount=float(mpesa_tx.trans_amount or 0),
             method="Paybill C2B",
             policy_id=policy_oid,
-            phone_number=tx.get("msisdn"),
-            description=f"Paybill {trans_id} ref {tx.get('bill_ref_number')} (manual allocation)",
+            phone_number=mpesa_tx.msisdn,
+            description=f"Paybill {trans_id} ref {mpesa_tx.bill_ref_number} (manual allocation)",
             recorded_by=recorded_by,
             extra={"c2b_trans_id": trans_id,
-                   "bill_ref_number": tx.get("bill_ref_number")},
+                   "bill_ref_number": mpesa_tx.bill_ref_number},
         )
-        db.mpesa_transactions.update_one(
-            {"trans_id": trans_id},
-            {"$set": {"status": "ALLOCATED", "client_id": client_oid,
-                      "policy_id": policy_oid,
-                      "receipt_id": ObjectId(receipt["_id"]),
-                      "receipt_number": receipt["receipt_number"],
-                      "allocated_by": str(recorded_by) if recorded_by else None,
-                      "updated_at": datetime.datetime.now(datetime.timezone.utc)}})
+
+        # Update the transaction
+        mpesa_tx.status = "ALLOCATED"
+        mpesa_tx.client_id = client_oid
+        mpesa_tx.policy_id = policy_oid
+        mpesa_tx.receipt_id = receipt.id
+        mpesa_tx.receipt_number = receipt.receipt_number
+        mpesa_tx.allocated_by = str(recorded_by) if recorded_by else None
+        mpesa_tx.updated_at = datetime.datetime.now(datetime.timezone.utc)
+        db.session.commit()
 
         from .audit_service import AuditService
         AuditService.log_action(
-            entity_type="payment", entity_id=receipt["_id"],
+            entity_type="payment", entity_id=receipt.id,
             action="paybill_suspense_allocated", performed_by=str(recorded_by or "system"),
             details={"trans_id": trans_id,
-                     "receipt": receipt["receipt_number"]})
-        return {"success": True, "receipt": receipt["receipt_number"],
+                     "receipt": receipt.receipt_number})
+        return {"success": True, "receipt": receipt.receipt_number,
                 "message": f"KES {receipt['amount']:,.2f} allocated. Receipt {receipt['receipt_number']}."}
 
     @classmethod
     def get_transactions(cls, user=None, limit=50):
-        db = get_db()
         from ..utils.visibility import is_admin, visible_client_ids
 
-        query = {"channel": "C2B"}
+        stmt = db.select(MpesaTransaction).where(MpesaTransaction.channel == "C2B")
+
         if not is_admin(user):
             c_ids = visible_client_ids(user)
             if c_ids is not None:
-                query = {"$and": [
-                    {"channel": "C2B"},
-                    {"$or": [
-                        {"client_id": {"$in": c_ids}},
-                        {"status": "UNALLOCATED"},
-                    ]},
-                ]}
+                # For non-admins, show transactions for their clients OR unallocated ones
+                client_condition = MpesaTransaction.client_id.in_(c_ids) if c_ids else False
+                unallocated_condition = MpesaTransaction.status == "UNALLOCATED"
+                stmt = stmt.where(db.or_(client_condition, unallocated_condition))
 
-        txs = list(db.mpesa_transactions.find(query).sort("created_at", -1).limit(limit))
+        stmt = stmt.order_by(MpesaTransaction.created_at.desc()).limit(limit)
+        txs = db.session.execute(stmt).scalars().all()
 
+        # Convert to dict format for compatibility
+        result = []
         for t in txs:
-            t["_id"] = str(t["_id"])
-            if t.get("policy_id"):
-                try:
-                    pol = db.policies.find_one({"_id": ObjectId(t["policy_id"])})
-                except Exception:
-                    pol = None
-                t["policy_number"] = pol.get("policy_number", "Unknown") if pol else "Unknown"
-            else:
-                t["policy_number"] = t.get("bill_ref_number") or "Direct / N/A"
+            t_dict = t.to_dict()
+            t_dict['_id'] = str(t.id)
 
-            if t.get("client_id"):
-                try:
-                    cli = db.users.find_one({"_id": ObjectId(t["client_id"])})
-                except Exception:
-                    cli = None
-                t["client_name"] = cli.get("full_name", "Unknown") if cli else "Unknown"
+            if t.policy_id:
+                policy = db.session.get(Policy, t.policy_id)
+                t_dict['policy_number'] = policy.policy_number if policy else "Unknown"
             else:
-                t["client_name"] = "Unallocated"
+                t_dict['policy_number'] = t_dict.get('bill_ref_number') or "Direct / N/A"
 
-        return txs
+            if t.client_id:
+                client = db.session.get(User, t.client_id)
+                t_dict['client_name'] = client.full_name if client else "Unknown"
+            else:
+                t_dict['client_name'] = "Unallocated"
+
+            result.append(t_dict)
+
+        return result
 
     @classmethod
     def get_suspense(cls, user=None, limit=100):
         """UNALLOCATED confirmations visible to `user` (admin: all)."""
-        db = get_db()
         from ..utils.visibility import is_admin, visible_client_ids
 
-        query = {"channel": "C2B", "status": "UNALLOCATED"}
+        stmt = db.select(MpesaTransaction).where(
+            db.and_(
+                MpesaTransaction.channel == "C2B",
+                MpesaTransaction.status == "UNALLOCATED"
+            )
+        )
+
         if not is_admin(user):
             c_ids = set(visible_client_ids(user) or [])
             phones = set()
-            for c in db.users.find({"_id": {"$in": list(c_ids)}}, {"phone": 1}):
-                full = cls.format_phone_number(c.get("phone", ""))
+            for c in db.session.execute(
+                db.select(User.phone).where(User.id.in_(list(c_ids)))
+            ).scalars():
+                full = cls.format_phone_number(c)
                 if full:
                     phones.add(full)
                     phones.add(full[3:])
-            query = {"$and": [query, {"$or": [
-                {"msisdn": {"$in": list(phones)}},
-            ]}]} if phones else {"_id": None}
-        return list(db.mpesa_transactions.find(query).sort("created_at", -1).limit(limit))
+
+            if phones:
+                phone_conditions = [MpesaTransaction.msisdn.op('regexp')(phone) for phone in phones]
+                stmt = stmt.where(db.or_(*phone_conditions))
+            else:
+                # No phones to match against, return empty
+                stmt = stmt.where(False)  # Match nothing
+
+        stmt = stmt.order_by(MpesaTransaction.created_at.desc()).limit(limit)
+        txs = db.session.execute(stmt).scalars().all()
+
+        # Convert to dict format for compatibility
+        result = []
+        for t in txs:
+            t_dict = t.to_dict()
+            t_dict['_id'] = str(t.id)
+
+            if t.policy_id:
+                try:
+                    pol = db.session.get(Policy, t.policy_id)
+                    t_dict['policy_number'] = pol.policy_number if pol else "Unknown"
+                except Exception:
+                    t_dict['policy_number'] = t_dict.get('bill_ref_number') or "Direct / N/A"
+            else:
+                t_dict['policy_number'] = t_dict.get('bill_ref_number') or "Direct / N/A"
+
+            if t.client_id:
+                try:
+                    cli = db.session.get(User, t.client_id)
+                    t_dict['client_name'] = cli.full_name if cli else "Unknown"
+                except Exception:
+                    t_dict['client_name'] = "Unknown"
+            else:
+                t_dict['client_name'] = "Unallocated"
+
+            result.append(t_dict)
+
+        return result

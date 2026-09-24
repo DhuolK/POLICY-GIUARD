@@ -11,8 +11,10 @@ so "mark all as read" is personal and one worker's bell can be cleared
 without touching anyone else's.
 """
 import datetime
+from datetime import datetime as dt, timezone
 
-from bson import ObjectId
+from app.extensions import db
+from app.models import Notification, User
 
 # Categories kept deliberately small — the bell must stay high-signal.
 CATEGORY_REMINDER = 'reminder'          # policy expiry approaching/expired
@@ -31,29 +33,27 @@ SEVERITY_ERROR = 'error'
 class NotificationService:
     @staticmethod
     def _db():
-        from app.extensions import get_db
-        return get_db()
+        return db
 
     # ------------------------------------------------------------------ write
 
     @classmethod
-    def create_staff(cls, category, severity, title, body,
-                     policy_id=None, policy_number=None):
+    def create_staff(cls, category, severity, title, body, policy_id=None, policy_number=None, user_id=None):
         """Create one staff-audience notification. Returns inserted id."""
-        db = cls._db()
-        doc = {
-            'audience': 'staff',
-            'category': category,
-            'severity': severity,
-            'title': title,
-            'body': body,
-            'policy_id': policy_id,
-            'policy_number': policy_number,
-            'read_by': [],
-            'created_at': datetime.datetime.utcnow(),
-        }
-        result = db.notifications.insert_one(doc)
-        return result.inserted_id
+        notification = Notification(
+            audience='staff',
+            category=category,
+            severity=severity,
+            title=title,
+            body=body,
+            policy_id=policy_id,
+            policy_number=policy_number,
+            created_at=datetime.datetime.now(timezone.utc),
+            user_id=user_id,
+        )
+        db.session.add(notification)
+        db.session.commit()
+        return notification.id
 
     # ------------------------------------------------------------------- read
 
@@ -62,22 +62,69 @@ class NotificationService:
         """Newest notifications for the staff bell dropdown."""
         if user is None:
             return []
-        docs = list(NotificationService._db().notifications.find(
-            {}, sort=[('created_at', -1)]).limit(limit))
-        for d in docs:
-            d['is_unread'] = ObjectId(str(user.id)) not in [
-                i for i in (_as_oid(r) for r in d.get('read_by', [])) if i]
-        return docs
+
+        # Base query for staff notifications
+        stmt = db.select(Notification).where(Notification.audience == 'staff').order_by(Notification.created_at.desc()).limit(limit)
+        notifications = db.session.execute(stmt).scalars().all()
+
+        # Convert to dict format and add is_unread flag
+        result = []
+        for notification in notifications:
+            notification_dict = notification.to_dict()
+            notification_dict['_id'] = str(notification.id)
+
+            # Determine if unread for this user
+            if user is not None:
+                user_id = None
+                if hasattr(user, 'id'):
+                    user_id = getattr(user, 'id')
+                elif isinstance(user, dict):
+                    user_id = user.get('id')
+
+                if user_id is not None:
+                    # Check if user ID is in read_by list
+                    is_unread = user_id not in [int(x) for x in notification.read_by.split(',') if x.strip()] if notification.read_by else True
+                    notification_dict['is_unread'] = is_unread
+                else:
+                    notification_dict['is_unread'] = True
+            else:
+                notification_dict['is_unread'] = True
+
+            result.append(notification_dict)
+
+        return result
 
     @staticmethod
     def unread_count(user):
         if user is None:
             return 0
-        uid = _as_oid(getattr(user, 'id', None))
-        if uid is None:
+
+        user_id = None
+        if hasattr(user, 'id'):
+            user_id = getattr(user, 'id')
+        elif isinstance(user, dict):
+            user_id = user.get('id')
+
+        if user_id is None:
             return 0
-        return NotificationService._db().notifications.count_documents(
-            {'audience': 'staff', 'read_by': {'$ne': uid}})
+
+        # Count notifications where user_id is NOT in read_by
+        # This is tricky with SQLAlchemy and a comma-separated string
+        # For simplicity, we'll get all and filter in Python for now
+        # A better approach would be to have a proper many-to-many relationship
+        stmt = db.select(Notification).where(Notification.audience == 'staff')
+        notifications = db.session.execute(stmt).scalars().all()
+
+        count = 0
+        for notification in notifications:
+            if notification.read_by:
+                read_by_list = [int(x) for x in notification.read_by.split(',') if x.strip()]
+                if user_id not in read_by_list:
+                    count += 1
+            else:
+                count += 1
+
+        return count
 
     # ----------------------------------------------------------------- update
 
@@ -85,21 +132,70 @@ class NotificationService:
     def mark_read(user, notification_id):
         """Mark one notification read for THIS user. Returns True if changed."""
         try:
-            nid = ObjectId(notification_id)
-        except Exception:
+            notification_id_int = int(notification_id)
+        except (ValueError, TypeError):
             return False
-        result = NotificationService._db().notifications.update_one(
-            {'_id': nid},
-            {'$addToSet': {'read_by': ObjectId(str(user.id))}})
-        return result.modified_count > 0
+
+        notification = db.session.get(Notification, notification_id_int)
+        if not notification:
+            return False
+
+        user_id = None
+        if hasattr(user, 'id'):
+            user_id = getattr(user, 'id')
+        elif isinstance(user, dict):
+            user_id = user.get('id')
+
+        if user_id is None:
+            return False
+
+        # Add user_id to read_by list (comma-separated string)
+        read_by_list = []
+        if notification.read_by:
+            read_by_list = [int(x) for x in notification.read_by.split(',') if x.strip()]
+
+        if user_id not in read_by_list:
+            read_by_list.append(user_id)
+            notification.read_by = ','.join(str(x) for x in read_by_list)
+            notification.updated_at = dt.now(timezone.utc)
+            db.session.commit()
+            return True
+
+        return False
 
     @staticmethod
     def mark_all_read(user):
         """Mark everything read for THIS user only."""
-        result = NotificationService._db().notifications.update_many(
-            {'audience': 'staff', 'read_by': {'$ne': ObjectId(str(user.id))}},
-            {'$addToSet': {'read_by': ObjectId(str(user.id))}})
-        return result.modified_count
+        user_id = None
+        if hasattr(user, 'id'):
+            user_id = getattr(user, 'id')
+        elif isinstance(user, dict):
+            user_id = user.get('id')
+
+        if user_id is None:
+            return 0
+
+        # Get all unread notifications for this user
+        stmt = db.select(Notification).where(Notification.audience == 'staff')
+        notifications = db.session.execute(stmt).scalars().all()
+
+        count = 0
+        for notification in notifications:
+            if notification.read_by:
+                read_by_list = [int(x) for x in notification.read_by.split(',') if x.strip()]
+                if user_id not in read_by_list:
+                    read_by_list.append(user_id)
+                    notification.read_by = ','.join(str(x) for x in read_by_list)
+                    notification.updated_at = dt.now(timezone.utc)
+                    count += 1
+            else:
+                notification.read_by = str(user_id)
+                notification.updated_at = dt.now(timezone.utc)
+                count += 1
+
+        if count > 0:
+            db.session.commit()
+        return count
 
     @staticmethod
     def broadcast_sms(message, target_group='all', underwriter_name=None, performed_by=None):
@@ -113,50 +209,73 @@ class NotificationService:
         for receipts and reminders.
         """
         import uuid as _uuid
-        db = NotificationService._db()
         from app.services.sms_engine import (
             enqueue_sms, drain_outbox, PRIORITY_BULK, KIND_BROADCAST)
         from app.utils.phone import normalize_ke_phone
 
-        client_query = {'role': 'customer'}
+        # Build client query based on target group
+        stmt = db.select(User).where(User.role == 'customer')
         target_label = "All Registered Customers"
 
         if target_group == 'active':
-            active_client_ids = db.policies.distinct('client_id', {'status': {'$in': ['active', 'published']}})
-            valid_ids = [ObjectId(cid) for cid in active_client_ids if cid and ObjectId.is_valid(cid)]
-            client_query['_id'] = {'$in': valid_ids}
+            # Get client IDs with active/published policies
+            active_client_ids = db.session.execute(
+                db.select(Policy.client_id).where(
+                    Policy.status.in_(['active', 'published'])
+                ).distinct()
+            ).scalars().all()
+            valid_ids = [cid for cid in active_client_ids if cid is not None]
+            stmt = stmt.where(User.id.in_(valid_ids))
             target_label = "Active Policy Holders"
 
         elif target_group == 'expiring':
             now = datetime.datetime.now(datetime.timezone.utc)
             in_30_days = (now + datetime.timedelta(days=30)).strftime('%Y-%m-%d')
             now_str = now.strftime('%Y-%m-%d')
-            expiring_ids = db.policies.distinct('client_id', {
-                'status': {'$in': ['active', 'published']},
-                'expiry_date': {'$gte': now_str, '$lte': in_30_days}
-            })
-            valid_ids = [ObjectId(cid) for cid in expiring_ids if cid and ObjectId.is_valid(cid)]
-            client_query['_id'] = {'$in': valid_ids}
+            expiring_client_ids = db.session.execute(
+                db.select(Policy.client_id).where(
+                    db.and_(
+                        Policy.status.in_(['active', 'published']),
+                        Policy.expiry_date >= now_str,
+                        Policy.expiry_date <= in_30_days
+                    )
+                ).distinct()
+            ).scalars().all()
+            valid_ids = [cid for cid in expiring_client_ids if cid is not None]
+            stmt = stmt.where(User.id.in_(valid_ids))
             target_label = "Policy Holders Expiring Within 30 Days"
 
         elif target_group == 'underwriter' and underwriter_name:
-            uw_ids = db.policies.distinct('client_id', {
-                '$or': [
-                    {'insurance_company': underwriter_name},
-                    {'insurance_company_id': underwriter_name}
-                ]
-            })
-            valid_ids = [ObjectId(cid) for cid in uw_ids if cid and ObjectId.is_valid(cid)]
-            client_query['_id'] = {'$in': valid_ids}
+            uw_client_ids = db.session.execute(
+                db.select(Policy.client_id).where(
+                    db.or_(
+                        Policy.insurance_company == underwriter_name,
+                        Policy.insurance_company_id == underwriter_name  # This would need to be a join
+                    )
+                ).distinct()
+            ).scalars().all()
+            # Fix: need to join with insurance company for the second condition
+            uw_client_ids = db.session.execute(
+                db.select(Policy.client_id).join(
+                    InsuranceCompany, Policy.insurance_company_id == InsuranceCompany.id, isouter=True
+                ).where(
+                    db.or_(
+                        Policy.insurance_company == underwriter_name,
+                        InsuranceCompany.name == underwriter_name
+                    )
+                ).distinct()
+            ).scalars().all()
+            valid_ids = [cid for cid in uw_client_ids if cid is not None]
+            stmt = stmt.where(User.id.in_(valid_ids))
             target_label = f"Clients Insured with {underwriter_name}"
 
-        clients = list(db.users.find(client_query))
+        clients = db.session.execute(stmt).scalars().all()
         batch_id = _uuid.uuid4().hex[:12]
         queued_ids = []
         failed_count = 0
 
-        for c in clients:
-            raw_phone = c.get('phone', '')
+        for client in clients:
+            raw_phone = client.phone or ''
             norm_phone = normalize_ke_phone(raw_phone)
             if not norm_phone:
                 failed_count += 1
@@ -165,12 +284,13 @@ class NotificationService:
                 norm_phone, message, KIND_BROADCAST,
                 priority=PRIORITY_BULK,
                 idempotency_key=f"broadcast:{batch_id}:{norm_phone}",
-                client_id=c.get('_id'),
+                client_id=client.id,
                 meta={'batch_id': batch_id,
                       'target_group': target_group,
                       'target_label': target_label,
                       'performed_by': str(performed_by or '')})
-            queued_ids.append(doc['_id'])
+            if doc:
+                queued_ids.append(doc.id)
 
         # One bounded inline drain for instant feedback; the scheduler
         # finishes any remainder on the bulk lane.
@@ -186,6 +306,14 @@ class NotificationService:
             for d in drain_summary.get('details', []))
 
         # Post operational note in staff in-app notification center
+        from .notification_service import NotificationService  # Avoid circular import
+        performed_user_id = None
+        if performed_by:
+            try:
+                performed_user_id = int(performed_by)
+            except (ValueError, TypeError):
+                performed_user_id = None
+
         NotificationService.create_staff(
             category=CATEGORY_SMS_SUCCESS if queued_ids else CATEGORY_SMS_FAILED,
             severity=SEVERITY_SUCCESS if queued_ids else SEVERITY_WARNING,
@@ -193,7 +321,8 @@ class NotificationService:
             body=f"Broadcast queued for {len(queued_ids)} recipient(s) "
                  f"({sent_now} sent immediately, {max(0, still_queued)} "
                  f"follow automatically). {failed_count} skipped (bad "
-                 f"number/opt-out). Preview: \"{message[:60]}...\""
+                 f"number/opt-out). Preview: \"{message[:60]}...\"",
+            user_id=performed_user_id
         )
 
         return {
@@ -210,15 +339,15 @@ class NotificationService:
 
     @staticmethod
     def ensure_indexes():
-        db = NotificationService._db()
         try:
-            db.notifications.create_index([('created_at', -1)])
+            # Indexes are defined in the model
+            pass
         except Exception:
             pass  # standalone dev instances may refuse; not fatal
 
 
 def _as_oid(value):
     try:
-        return ObjectId(value) if not isinstance(value, ObjectId) else value
+        return int(value) if not isinstance(value, int) else value
     except Exception:
         return None

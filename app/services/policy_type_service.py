@@ -1,51 +1,67 @@
 import datetime
-from bson import ObjectId
-from app.extensions import get_db
+from app.extensions import db
+from app.models import PolicyType
 
 class PolicyTypeService:
     @staticmethod
     def get_policy_types():
-        db = get_db()
-        types = list(db.policy_types.find().sort("name", 1))
-        for t in types:
-            t['_id'] = str(t['_id'])
-        return types
+        stmt = db.select(PolicyType).order_by(PolicyType.name.asc())
+        policy_types = db.session.execute(stmt).scalars().all()
+        # Convert to dict format for compatibility
+        return [policy_type.to_dict() for policy_type in policy_types]
 
     @staticmethod
     def get_policy_type(type_id):
-        db = get_db()
-        policy_type = db.policy_types.find_one({"_id": ObjectId(type_id)})
+        try:
+            type_id_int = int(type_id)
+        except (ValueError, TypeError):
+            return None
+        policy_type = db.session.get(PolicyType, type_id_int)
         if policy_type:
-            policy_type['_id'] = str(policy_type['_id'])
-        return policy_type
+            return policy_type.to_dict()
+        return None
 
     @staticmethod
     def add_policy_type(name, description, default_premium):
-        db = get_db()
-        type_data = {
-            "name": name,
-            "description": description,
-            "default_premium": float(default_premium) if default_premium else 0.0,
-            "created_at": datetime.datetime.utcnow()
-        }
-        result = db.policy_types.insert_one(type_data)
-        type_data['_id'] = str(result.inserted_id)
-        return type_data
+        policy_type = PolicyType(
+            name=name,
+            description=description,
+            default_premium=float(default_premium) if default_premium else 0.0,
+            created_at=datetime.datetime.utcnow(),
+            updated_at=datetime.datetime.utcnow()
+        )
+        db.session.add(policy_type)
+        db.session.commit()
+        return policy_type.to_dict()
 
     @staticmethod
     def update_policy_type(type_id, name, description, default_premium):
-        db = get_db()
-        update_data = {
-            "name": name,
-            "description": description,
-            "default_premium": float(default_premium) if default_premium else 0.0,
-            "updated_at": datetime.datetime.utcnow()
-        }
-        db.policy_types.update_one({"_id": ObjectId(type_id)}, {"$set": update_data})
+        try:
+            type_id_int = int(type_id)
+        except (ValueError, TypeError):
+            return False
+        policy_type = db.session.get(PolicyType, type_id_int)
+        if not policy_type:
+            return False
+
+        policy_type.name = name
+        policy_type.description = description
+        policy_type.default_premium = float(default_premium) if default_premium else 0.0
+        policy_type.updated_at = datetime.datetime.utcnow()
+
+        db.session.commit()
         return True
 
     @staticmethod
     def delete_policy_type(type_id):
-        db = get_db()
-        db.policy_types.delete_one({"_id": ObjectId(type_id)})
+        try:
+            type_id_int = int(type_id)
+        except (ValueError, TypeError):
+            return False
+        policy_type = db.session.get(PolicyType, type_id_int)
+        if not policy_type:
+            return False
+
+        db.session.delete(policy_type)
+        db.session.commit()
         return True

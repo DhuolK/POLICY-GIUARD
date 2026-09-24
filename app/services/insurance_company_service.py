@@ -1,8 +1,9 @@
 import datetime
-import re
-from bson import ObjectId
-from app.extensions import get_db
+import logging
+from app.extensions import db
+from app.models import InsuranceCompany, Policy, Vehicle
 
+# Seed data for the 56 licensed underwriters in Kenya
 KENYA_INSURANCE_COMPANIES_SEED = [
     {"name": "AAR Insurance Kenya Limited", "short_name": "AAR", "code": "AAR", "is_active": True},
     {"name": "Africa Merchant Assurance Company Limited (AMACO)", "short_name": "AMACO", "code": "AMA", "is_active": True},
@@ -54,7 +55,6 @@ KENYA_INSURANCE_COMPANIES_SEED = [
     {"name": "The Kenyan Alliance Insurance Company Limited", "short_name": "Kenyan Alliance", "code": "KAL", "is_active": True},
     {"name": "Trident Insurance Company Limited", "short_name": "Trident", "code": "TRI", "is_active": True},
     {"name": "UAP Insurance Company Limited", "short_name": "UAP Insurance", "code": "UAP", "is_active": True},
-    {"name": "Xplico Insurance Company Limited", "short_name": "Xplico", "code": "XPL", "is_active": True},
     {"name": "Absa Life Assurance Kenya Limited", "short_name": "Absa Life", "code": "ABS", "is_active": True},
     {"name": "Capex Life Assurance Company Limited", "short_name": "Capex Life", "code": "CAP", "is_active": True},
     {"name": "Saham Assurance Company Kenya Limited", "short_name": "Saham", "code": "SAH", "is_active": True},
@@ -62,155 +62,226 @@ KENYA_INSURANCE_COMPANIES_SEED = [
     {"name": "MUA Insurance (Kenya) Limited", "short_name": "MUA", "code": "MUA", "is_active": True},
 ]
 
+logger = logging.getLogger(__name__)
+
+
+def _utcnow():
+    return datetime.datetime.now(datetime.timezone.utc)
+
 
 class InsuranceCompanyService:
     @staticmethod
     def ensure_seeded():
         """Ensure the 56 licensed underwriters are seeded in the database."""
-        db = get_db()
-        count = db.insurance_companies.count_documents({})
+        # Check if any insurance companies exist
+        count = db.session.execute(db.select(db.func.count(InsuranceCompany.id))).scalar()
         if count == 0:
-            now = datetime.datetime.now(datetime.timezone.utc)
-            docs = []
+            now = _utcnow()
+            companies = []
             for item in KENYA_INSURANCE_COMPANIES_SEED:
-                doc = dict(item)
-                doc["commission_rate"] = 10.0
-                doc["contact_person"] = ""
-                doc["created_at"] = now
-                doc["updated_at"] = now
-                docs.append(doc)
-            db.insurance_companies.insert_many(docs)
+                company = InsuranceCompany(
+                    name=item["name"],
+                    short_name=item["short_name"],
+                    code=item["code"],
+                    commission_rate=10.0,
+                    contact_person="",
+                    is_active=item["is_active"],
+                    created_at=now,
+                    updated_at=now
+                )
+                companies.append(company)
+
+            db.session.add_all(companies)
+            try:
+                db.session.commit()
+                logger.info(f"Seeded {len(companies)} insurance companies")
+            except Exception as e:
+                logger.error(f"Failed to seed insurance companies: {e}")
+                db.session.rollback()
+
+    @staticmethod
+    def _utcnow():
+        return datetime.datetime.now(datetime.timezone.utc)
 
     @staticmethod
     def get_companies(search_query=None, status_filter=None):
         """Fetch all insurance companies with their linked policy & vehicle counts."""
-        db = get_db()
         InsuranceCompanyService.ensure_seeded()
 
-        query = {}
+        # Base query
+        stmt = db.select(InsuranceCompany)
+
+        # Apply search query
         if search_query:
-            query["$or"] = [
-                {"name": {"$regex": re.escape(search_query), "$options": "i"}},
-                {"short_name": {"$regex": re.escape(search_query), "$options": "i"}},
-                {"code": {"$regex": re.escape(search_query), "$options": "i"}}
-            ]
+            search_term = f"%{search_query}%"
+            stmt = stmt.where(
+                db.or_(
+                    InsuranceCompany.name.ilike(search_term),
+                    InsuranceCompany.short_name.ilike(search_term),
+                    InsuranceCompany.code.ilike(search_term)
+                )
+            )
 
+        # Apply status filter
         if status_filter in ["active", "inactive"]:
-            query["is_active"] = (status_filter == "active")
+            is_active = (status_filter == "active")
+            stmt = stmt.where(InsuranceCompany.is_active == is_active)
 
-        companies = list(db.insurance_companies.find(query).sort("name", 1))
+        # Order by name
+        stmt = stmt.order_by(InsuranceCompany.name.asc())
 
-        # Aggregate vehicle and policy counts per insurance company
-        for comp in companies:
-            cid = comp["_id"]
-            comp["_id"] = str(cid)
+        companies = db.session.execute(stmt).scalars().all()
+
+        # Convert to dict format and add counts
+        result = []
+        for company in companies:
+            company_dict = company.to_dict()
 
             # Count policies linking to this company
-            policy_count = db.policies.count_documents({
-                "$or": [
-                    {"insurance_company_id": cid},
-                    {"insurance_company_id": str(cid)},
-                    {"insurance_company": comp.get("name")},
-                    {"insurance_company": comp.get("short_name")}
-                ]
-            })
-            comp["policy_count"] = policy_count
+            policy_count = db.session.execute(
+                db.select(db.func.count(Policy.id)).where(
+                    db.or_(
+                        Policy.insurance_company_id == company.id,
+                        # For backward compatibility with string storage
+                        db.and_(
+                            InsuranceCompany.name.isnot(None),
+                            db.func.lower(Policy.insurance_company) == db.func.lower(company.name)
+                        ),
+                        db.and_(
+                            InsuranceCompany.short_name.isnot(None),
+                            db.func.lower(Policy.insurance_company) == db.func.lower(company.short_name)
+                        )
+                    )
+                )
+            ).scalar()
+            company_dict['policy_count'] = policy_count
 
             # Count distinct vehicles linking to policies with this company
-            vehicle_ids = db.policies.distinct("vehicle_id", {
-                "$or": [
-                    {"insurance_company_id": cid},
-                    {"insurance_company_id": str(cid)},
-                    {"insurance_company": comp.get("name")},
-                    {"insurance_company": comp.get("short_name")}
-                ]
-            })
-            comp["vehicle_count"] = len([v for v in vehicle_ids if v is not None])
+            vehicle_count = db.session.execute(
+                db.select(db.func.count(db.distinct(Vehicle.id))).where(
+                    Vehicle.id.in_(
+                        db.select(Policy.vehicle_id).where(
+                            db.or_(
+                                Policy.insurance_company_id == company.id,
+                                db.and_(
+                                    InsuranceCompany.name.isnot(None),
+                                    db.func.lower(Policy.insurance_company) == db.func.lower(company.name)
+                                ),
+                                db.and_(
+                                    InsuranceCompany.short_name.isnot(None),
+                                    db.func.lower(Policy.insurance_company) == db.func.lower(company.short_name)
+                                )
+                            )
+                        )
+                    )
+                )
+            ).scalar()
+            company_dict['vehicle_count'] = vehicle_count or 0
 
-        return companies
+            result.append(company_dict)
+
+        return result
 
     @staticmethod
     def get_active_companies():
         """Returns active underwriters for select dropdowns."""
-        db = get_db()
         InsuranceCompanyService.ensure_seeded()
-        companies = list(db.insurance_companies.find({"is_active": True}).sort("name", 1))
-        for comp in companies:
-            comp["_id"] = str(comp["_id"])
-        return companies
+        stmt = db.select(InsuranceCompany).where(
+            InsuranceCompany.is_active == True
+        ).order_by(InsuranceCompany.name.asc())
+        companies = db.session.execute(stmt).scalars().all()
+        return [company.to_dict() for company in companies]
 
     @staticmethod
     def get_company_by_id(company_id):
-        db = get_db()
-        if not ObjectId.is_valid(company_id):
+        try:
+            company_id_int = int(company_id)
+        except (ValueError, TypeError):
             return None
-        comp = db.insurance_companies.find_one({"_id": ObjectId(company_id)})
-        if comp:
-            comp["_id"] = str(comp["_id"])
-        return comp
+        company = db.session.get(InsuranceCompany, company_id_int)
+        if company:
+            return company.to_dict()
+        return None
 
     @staticmethod
     def add_company(name, short_name="", code="", phone="", email="", commission_rate=10.0, contact_person="", is_active=True):
-        db = get_db()
-        now = datetime.datetime.now(datetime.timezone.utc)
         try:
             comm_val = float(commission_rate)
         except (ValueError, TypeError):
             comm_val = 10.0
 
-        doc = {
-            "name": name.strip(),
-            "short_name": short_name.strip() if short_name else name.strip()[:10],
-            "code": code.strip().upper() if code else name.strip()[:3].upper(),
-            "phone": phone.strip(),
-            "email": email.strip(),
-            "commission_rate": comm_val,
-            "contact_person": contact_person.strip(),
-            "is_active": bool(is_active),
-            "created_at": now,
-            "updated_at": now
-        }
-        res = db.insurance_companies.insert_one(doc)
-        doc["_id"] = str(res.inserted_id)
-        return doc
+        company = InsuranceCompany(
+            name=name.strip(),
+            short_name=short_name.strip() if short_name else name.strip()[:10],
+            code=code.strip().upper() if code else name.strip()[:3].upper(),
+            phone=phone.strip(),
+            email=email.strip(),
+            commission_rate=comm_val,
+            contact_person=contact_person.strip(),
+            is_active=bool(is_active),
+            created_at=_utcnow(),
+            updated_at=_utcnow()
+        )
+
+        db.session.add(company)
+        try:
+            db.session.commit()
+            return company.to_dict()
+        except Exception:
+            db.session.rollback()
+            return None
 
     @staticmethod
     def update_company(company_id, name, short_name="", code="", phone="", email="", commission_rate=10.0, contact_person="", is_active=True):
-        db = get_db()
-        if not ObjectId.is_valid(company_id):
+        try:
+            company_id_int = int(company_id)
+        except (ValueError, TypeError):
             return False, "Invalid company ID"
-        now = datetime.datetime.now(datetime.timezone.utc)
+
         try:
             comm_val = float(commission_rate)
         except (ValueError, TypeError):
             comm_val = 10.0
 
-        update_doc = {
-            "name": name.strip(),
-            "short_name": short_name.strip(),
-            "code": code.strip().upper(),
-            "phone": phone.strip(),
-            "email": email.strip(),
-            "commission_rate": comm_val,
-            "contact_person": contact_person.strip(),
-            "is_active": bool(is_active),
-            "updated_at": now
-        }
-        db.insurance_companies.update_one({"_id": ObjectId(company_id)}, {"$set": update_doc})
-        return True, None
+        company = db.session.get(InsuranceCompany, company_id_int)
+        if not company:
+            return False, "Company not found"
+
+        company.name = name.strip()
+        company.short_name = short_name.strip() if short_name else company.name[:10]
+        company.code = code.strip().upper() if code else company.name[:3].upper()
+        company.phone = phone.strip()
+        company.email = email.strip()
+        company.commission_rate = comm_val
+        company.contact_person = contact_person.strip()
+        company.is_active = bool(is_active)
+        company.updated_at = _utcnow()
+
+        try:
+            db.session.commit()
+            return True, None
+        except Exception:
+            db.session.rollback()
+            return False, "Failed to update company"
 
     @staticmethod
     def toggle_status(company_id, is_active=None):
-        db = get_db()
-        if not ObjectId.is_valid(company_id):
+        try:
+            company_id_int = int(company_id)
+        except (ValueError, TypeError):
             return False, "Invalid company ID"
-        comp = db.insurance_companies.find_one({"_id": ObjectId(company_id)})
-        if not comp:
+
+        company = db.session.get(InsuranceCompany, company_id_int)
+        if not company:
             return False, "Company not found"
-        new_status = not comp.get("is_active", True) if is_active is None else bool(is_active)
-        now = datetime.datetime.now(datetime.timezone.utc)
-        db.insurance_companies.update_one(
-            {"_id": ObjectId(company_id)},
-            {"$set": {"is_active": new_status, "updated_at": now}}
-        )
-        return True, new_status
+
+        new_status = not company.is_active if is_active is None else bool(is_active)
+        company.is_active = new_status
+        company.updated_at = _utcnow()
+
+        try:
+            db.session.commit()
+            return True, new_status
+        except Exception:
+            db.session.rollback()
+            return False, "Failed to toggle status"

@@ -23,11 +23,30 @@ def create_app(config_name=None):
     from werkzeug.middleware.proxy_fix import ProxyFix
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
-    # Uptime/health probe for monitors (UptimeRobot, cPanel checks). No auth,
-    # no DB dependency — it must stay up even if Mongo blips.
+    # Uptime/health probe for monitors (UptimeRobot, cPanel checks). Checks
+    # database connectivity and returns detailed status.
     @app.route('/healthz')
     def healthz():
-        return {'status': 'ok'}, 200
+        from sqlalchemy import text
+        from time import perf_counter
+        start = perf_counter()
+        try:
+            # Execute a simple query to check database connectivity
+            db.session.execute(text('SELECT 1'))
+            db_latency = (perf_counter() - start) * 1000  # milliseconds
+            return {
+                'status': 'ok',
+                'database': 'connected',
+                'latency_ms': round(db_latency, 2)
+            }, 200
+        except Exception as e:
+            db_latency = (perf_counter() - start) * 1000
+            return {
+                'status': 'error',
+                'database': 'disconnected',
+                'latency_ms': round(db_latency, 2),
+                'error': str(e)
+            }, 503
 
 
     # Initialize extensions
@@ -36,18 +55,24 @@ def create_app(config_name=None):
     from app.extensions import csrf
     csrf.init_app(app)
 
-    # Rate-limit counters share the app's MongoDB (no Redis on shared hosting).
-    # Derived from the resolved MONGO_* settings so the two can never drift, and
-    # capped by a short server-selection timeout so a Mongo outage cannot hang
-    # every login for pymongo's 30s default.
+    # Import models to ensure they are registered with SQLAlchemy
+    from app import models
+
+    # Rate-limit storage configuration. Default to memory:// storage.
+    # Override with RATELIMIT_STORAGE_URI environment variable if needed.
     if not app.config.get('RATELIMIT_STORAGE_URI'):
-        app.config['RATELIMIT_STORAGE_URI'] = app.config['MONGO_URI']
-    if not app.config.get('RATELIMIT_STORAGE_OPTIONS'):
-        app.config['RATELIMIT_STORAGE_OPTIONS'] = {
-            'database_name': (app.config.get('RATELIMIT_DATABASE_NAME')
-                              or app.config['MONGO_DB_NAME']),
-            'serverSelectionTimeoutMS': app.config.get('RATELIMIT_MONGO_TIMEOUT_MS', 2000),
-        }
+        app.config['RATELIMIT_STORAGE_URI'] = 'memory://'
+        if not app.config.get('RATELIMIT_STORAGE_OPTIONS'):
+            app.config['RATELIMIT_STORAGE_OPTIONS'] = {}
+    else:
+        storage_uri = app.config.get('RATELIMIT_STORAGE_URI', '')
+        if storage_uri.startswith('mongodb://') or storage_uri.startswith('mongodb+srv://'):
+            if not app.config.get('RATELIMIT_STORAGE_OPTIONS'):
+                app.config['RATELIMIT_STORAGE_OPTIONS'] = {
+                    'database_name': (app.config.get('RATELIMIT_DATABASE_NAME')
+                                      or app.config.get('MONGO_DB_NAME', 'policy_guard')),
+                    'serverSelectionTimeoutMS': app.config.get('RATELIMIT_MONGO_TIMEOUT_MS', 2000),
+                }
     limiter.init_app(app)
 
     # Register blueprints
@@ -148,6 +173,15 @@ def create_app(config_name=None):
             "object-src 'none'; base-uri 'self'; form-action 'self'; "
             "frame-ancestors 'none'")
         return response
+
+    @app.errorhandler(500)
+    def internal_server_error(e):
+        app.logger.error(f'Internal server error: {e}')
+        return {'error': 'Internal server error'}, 500
+
+    @app.errorhandler(404)
+    def not_found(e):
+        return {'error': 'Not found'}, 404
 
     return app
 

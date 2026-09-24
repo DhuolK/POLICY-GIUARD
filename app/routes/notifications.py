@@ -33,11 +33,7 @@ def require_staff():
 @notifications_bp.route('/')
 @login_required
 def index():
-    docs = list(NotificationService._db().notifications.find(
-        {}, sort=[('created_at', -1)]).limit(50))
-    me = str(current_user.id)
-    for d in docs:
-        d['is_unread'] = me not in {str(r) for r in d.get('read_by', [])}
+    docs = NotificationService.latest_for(current_user, limit=50)
     unread = NotificationService.unread_count(current_user)
     return render_template('notifications/list.html',
                            notifications=docs, unread=unread)

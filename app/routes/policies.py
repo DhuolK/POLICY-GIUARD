@@ -18,6 +18,11 @@ policies_bp = Blueprint('policies', __name__, url_prefix='/policies')
 
 POLICY_NUMBER_PREFIX = 'PG-2026-'
 
+# Feature flag: Underwriting Review Queue is temporarily deactivated.
+# Set to True to re-enable the queue (nav link lives in templates/base.html,
+# Policy dropdown) — the route then 404s while disabled.
+UNDERWRITING_QUEUE_ENABLED = False
+
 
 def _format_policy_number(seq_num):
     return f"{POLICY_NUMBER_PREFIX}{str(seq_num).zfill(5)}"
@@ -551,6 +556,8 @@ def submit(policy_id):
 @login_required
 @role_required('admin', 'worker')
 def underwriting_queue():
+    if not UNDERWRITING_QUEUE_ENABLED:
+        abort(404)
     status_filter = request.args.get('status', '').strip().lower()
     underwriter_filter = request.args.get('underwriter', '').strip()
 
@@ -560,6 +567,7 @@ def underwriting_queue():
         underwriter_filter=underwriter_filter or None
     )
 
+    from app.services.insurance_company_service import InsuranceCompanyService
     insurance_companies = InsuranceCompanyService.get_active_companies()
 
     return render_template(

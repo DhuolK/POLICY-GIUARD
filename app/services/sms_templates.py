@@ -12,6 +12,8 @@ Keys: renewal_reminder, payment_receipt, balance_reminder.
 """
 import datetime
 import logging
+from app.extensions import db
+from app.models import Smstemplate
 
 log = logging.getLogger(__name__)
 
@@ -38,41 +40,49 @@ DEFAULTS = {
 
 
 def _db():
-    from app.extensions import get_db
-    return get_db()
+    return db
 
 
 def ensure_seed():
     """Insert missing template keys at version 1. Safe to call on every tick."""
-    db = _db()
-    try:
-        db.sms_templates.create_index('key', unique=True)
-    except Exception as exc:  # pragma: no cover - dev instances vary
-        log.warning('sms_templates index ensure skipped: %s', exc)
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = _utcnow()
     for key, body in DEFAULTS.items():
-        try:
-            db.sms_templates.update_one(
-                {'key': key},
-                {'$setOnInsert': {
-                    'key': key, 'body': body, 'version': 1,
-                    'created_at': now, 'updated_at': now,
-                }},
-                upsert=True,
+        # Check if template already exists
+        existing = db.session.execute(
+            db.select(Smstemplate).where(Smstemplate.key == key)
+        ).scalar_one_or_none()
+
+        if not existing:
+            # Create new template
+            template = Smstemplate(
+                key=key,
+                body=body,
+                version=1,
+                created_at=now,
+                updated_at=now
             )
-        except Exception as exc:  # pragma: no cover
-            log.warning('sms_templates seed skipped for %s: %s', key, exc)
+            db.session.add(template)
+
+    try:
+        db.session.commit()
+    except Exception as exc:  # pragma: no cover - dev instances vary
+        log.warning('sms_templates seed skipped: %s', exc)
+        db.session.rollback()
+
+
+def _utcnow():
+    return datetime.datetime.now(datetime.timezone.utc)
 
 
 def get_template(key):
     """Return (body, version) for `key`, falling back to the seed default."""
     ensure_seed()
-    try:
-        doc = _db().sms_templates.find_one({'key': key})
-    except Exception:  # pragma: no cover - DB blip: use seed copy
-        doc = None
-    if doc and doc.get('body'):
-        return doc['body'], int(doc.get('version') or 1)
+    template = db.session.execute(
+        db.select(Smstemplate).where(Smstemplate.key == key)
+    ).scalar_one_or_none()
+
+    if template and template.body:
+        return template.body, template.version
     return DEFAULTS.get(key, ''), 0
 
 
@@ -89,18 +99,42 @@ def render(key, **variables):
 def save_template(key, body):
     """Store new copy for `key`, bumping its version. Returns new version."""
     ensure_seed()
-    now = datetime.datetime.now(datetime.timezone.utc)
-    doc = _db().sms_templates.find_one({'key': key})
-    version = int((doc or {}).get('version') or 0) + 1
-    _db().sms_templates.update_one(
-        {'key': key},
-        {'$set': {'body': body, 'version': version, 'updated_at': now}},
-        upsert=True,
-    )
-    return version
+    now = _utcnow()
+
+    template = db.session.execute(
+        db.select(Smstemplate).where(Smstemplate.key == key)
+    ).scalar_one_or_none()
+
+    version = (template.version if template else 0) + 1
+
+    if template:
+        # Update existing template
+        template.body = body
+        template.version = version
+        template.updated_at = now
+    else:
+        # Create new template
+        template = Smstemplate(
+            key=key,
+            body=body,
+            version=version,
+            created_at=now,
+            updated_at=now
+        )
+        db.session.add(template)
+
+    try:
+        db.session.commit()
+        return version
+    except Exception:
+        db.session.rollback()
+        return 0  # Return 0 to indicate failure
 
 
 def list_templates():
     """All templates for ops visibility (admin UI / status endpoint)."""
     ensure_seed()
-    return list(_db().sms_templates.find({}, sort=[('key', 1)]))
+    templates = db.session.execute(
+        db.select(Smstemplate).order_by(Smstemplate.key)
+    ).scalars().all()
+    return [template.to_dict() for template in templates]

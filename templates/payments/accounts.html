@@ -604,6 +604,17 @@ function closeModal(id) {
     }
 }
 
+// Safety hatch: clicking the dimmed backdrop dismisses the modal, so a
+// mis-positioned or stuck overlay can never trap the user on the page.
+['cashModal', 'allocateModal'].forEach(function (mid) {
+    const el = document.getElementById(mid);
+    if (el) {
+        el.addEventListener('click', function (e) {
+            if (e.target === el) closeModal(mid);
+        });
+    }
+});
+
 function openCashModal(clientId, amount) {
     if (clientId) document.getElementById('cash_client_id').value = clientId;
     if (amount) document.getElementById('cash_amount').value = amount;

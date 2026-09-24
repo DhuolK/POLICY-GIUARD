@@ -41,3 +41,6 @@ Policy guard.docx
 *.doc
 /Logo.png
 /Logo icon.png
+
+# Flask instance folder (local SQLite test DBs from migration test runs)
+instance/

@@ -3,21 +3,19 @@ import unittest
 import sys
 import os
 from unittest.mock import patch, MagicMock
-from bson import ObjectId
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import pymongo
 from app import create_app
+from app.extensions import db
+from app.models import Notification, User
 from app.services import notification_service as ns
 from app.services.notification_service import NotificationService
-
-TEST_DB = 'policy_guard_notification_routes_test'
 
 
 def _staff(uid, role='worker'):
     u = MagicMock()
-    u.id = str(uid)
+    u.id = uid
     u.role = role
     u.is_authenticated = True
     return u
@@ -25,16 +23,18 @@ def _staff(uid, role='worker'):
 
 class TestNotificationRoutes(unittest.TestCase):
     def setUp(self):
-        self.db = pymongo.MongoClient('mongodb://localhost:27017')[TEST_DB]
-        self.patch_db = patch('app.extensions.get_db', return_value=self.db)
-        self.patch_db.start()
-        self.addCleanup(self.patch_db.stop)
-        self.db.notifications.delete_many({})
-
         self.app = create_app('testing')
         self.app.config['TESTING'] = True
         self.app.config['WTF_CSRF_ENABLED'] = False
+        self.app_context = self.app.app_context()
+        self.app_context.push()
+        db.create_all()
         self.client = self.app.test_client()
+
+    def tearDown(self):
+        db.session.remove()
+        db.drop_all()
+        self.app_context.pop()
 
     def _as(self, user_mock):
         p = patch('flask_login.utils._get_user', return_value=user_mock)
@@ -46,7 +46,7 @@ class TestNotificationRoutes(unittest.TestCase):
         self.assertEqual(resp.status_code, 403)
 
     def test_worker_sees_bell_items_and_marks_all_read(self):
-        uid = ObjectId()
+        uid = 101
         me = _staff(uid)
         self._as(me)
         for i in range(3):
@@ -65,11 +65,11 @@ class TestNotificationRoutes(unittest.TestCase):
         self.assertEqual(NotificationService.unread_count(me), 0)
 
         # Another staff member still sees them as unread.
-        other = _staff(ObjectId())
+        other = _staff(102)
         self.assertEqual(NotificationService.unread_count(other), 3)
 
     def test_api_unread_json(self):
-        admin = _staff(ObjectId(), role='admin')
+        admin = _staff(103, role='admin')
         self._as(admin)
         NotificationService.create_staff(
             ns.CATEGORY_SMS_FAILED, ns.SEVERITY_ERROR, 'SMS failed', 'boom')
@@ -78,7 +78,7 @@ class TestNotificationRoutes(unittest.TestCase):
         self.assertEqual(resp.get_json()['unread'], 1)
 
     def test_context_processor_injects_bell_data(self):
-        me = _staff(ObjectId())
+        me = _staff(104)
         self._as(me)
         NotificationService.create_staff(
             ns.CATEGORY_REMINDER, ns.SEVERITY_WARNING, 'Bell check', 'x')

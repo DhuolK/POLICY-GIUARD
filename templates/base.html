@@ -238,10 +238,6 @@
                                 <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
                                 <span>Issued Policies</span>
                             </a>
-                            <a href="{{ url_for('policies.underwriting_queue') }}" class="dropdown-item">
-                                <svg class="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path></svg>
-                                <span>Underwriting Review Queue</span>
-                            </a>
                             <a href="{{ url_for('policies.companies') }}" class="dropdown-item">
                                 <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
                                 <span>Insurance Underwriters</span>
@@ -663,20 +659,32 @@
             }, 4500);
         }
 
-        // Page content entrance animation
+        // Page content entrance animation.
+        // clearProps is CRITICAL: without it GSAP leaves an inline transform on
+        // this wrapper, and a transformed ancestor becomes the containing block
+        // for position:fixed descendants — which silently breaks every modal
+        // (fixed inset-0 overlays render anchored to the page instead of the
+        // viewport, going full-screen-invisible and swallowing all taps, i.e.
+        // the "Record Cash Payment button freezes the app" bug).
         gsap.from("main > *", {
             y: 20,
             opacity: 0,
             duration: 0.6,
             ease: "power3.out",
-            stagger: 0.08
+            stagger: 0.08,
+            clearProps: "all"
         });
 
         // Desktop Dropdowns handling (hover-intent: overlapping bridge + close delay
         // so diagonal cursor travel never kills the menu mid-flight)
-        const NAV_CLOSE_DELAY = 220;
+        const NAV_CLOSE_DELAY = 320;
         const navDropdowns = document.querySelectorAll('.group\\/nav');
-        const closeNavMenu = (dropdown) => {
+        const closeNavMenu = (dropdown, force = false) => {
+            // Safety guard: if the pointer is still anywhere inside this dropdown
+            // (button OR the open menu), never close it — heals any sub-pixel gap
+            // or race in the hover geometry that made menus feel like they
+            // "close instantly" while the user was reaching for them.
+            if (!force && dropdown.matches(':hover')) return;
             const menu = dropdown.querySelector('.dropdown-menu');
             const btn = dropdown.querySelector('.dropdown-toggle');
             if (menu) menu.classList.add('hidden');
@@ -704,14 +712,21 @@
             const btn = dropdown.querySelector('.dropdown-toggle');
             const menu = dropdown.querySelector('.dropdown-menu');
             if (btn && menu) {
-                // Toggle on click for touch screens / pointer
+                // Click: toggle on touch-only devices. On hover-capable (mouse)
+                // devices, hover already opened the menu — clicking the label must
+                // NOT close it (that was the "closes instantly" trap); keep it open.
+                const canHover = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    const isClosed = menu.classList.contains('hidden');
-                    if (isClosed) {
+                    if (canHover) {
                         openNavMenu(dropdown);
                     } else {
-                        closeNavMenu(dropdown);
+                        const isClosed = menu.classList.contains('hidden');
+                        if (isClosed) {
+                            openNavMenu(dropdown);
+                        } else {
+                            closeNavMenu(dropdown, true);
+                        }
                     }
                 });
 
@@ -735,9 +750,11 @@
             }
         });
 
-        // Close dropdowns on outside click or escape
-        document.addEventListener('click', () => {
-            navDropdowns.forEach(closeNavMenu);
+        // Close dropdowns on outside click (forced — pointer is outside by definition)
+        document.addEventListener('click', (e) => {
+            navDropdowns.forEach(d => {
+                if (!d.contains(e.target)) closeNavMenu(d, true);
+            });
         });
 
         // Global Apple-Style Non-blocking Toast Notification Dispatcher
@@ -785,7 +802,7 @@
         };
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
-                navDropdowns.forEach(closeNavMenu);
+                navDropdowns.forEach(d => closeNavMenu(d, true));
                 const bellPanel = document.getElementById('bell-panel');
                 if (bellPanel) bellPanel.classList.add('hidden');
                 closeMobileDrawer();

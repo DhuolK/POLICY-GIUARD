@@ -1,6 +1,6 @@
 import datetime
-from bson import ObjectId
-from app.extensions import get_db
+from app.extensions import db
+from app.models import Claim, Policy
 
 class FraudService:
     @staticmethod
@@ -9,7 +9,6 @@ class FraudService:
         Evaluates a claim against 6 key fraud risk rules, including SHA-256 duplicate document hash detection across MongoDB documents.
         Returns risk score (0-100), risk level (low_risk, medium_review, high_risk), and risk flags.
         """
-        db = get_db()
         risk_score = 0
         risk_flags = []
 
@@ -17,16 +16,16 @@ class FraudService:
         policy_id = claim_data.get('policy_id')
         if policy_id:
             try:
-                p_id = ObjectId(policy_id) if isinstance(policy_id, str) else policy_id
-                policy = db.policies.find_one({"_id": p_id})
-                if policy and policy.get('created_at'):
+                policy_id_int = int(policy_id) if isinstance(policy_id, str) else policy_id
+                policy = db.session.get(Policy, policy_id_int)
+                if policy and policy.created_at:
                     incident_date_str = claim_data.get('incident_date')
                     if incident_date_str:
                         incident_dt = datetime.datetime.strptime(incident_date_str, "%Y-%m-%d")
-                        policy_dt = policy['created_at']
+                        policy_dt = policy.created_at
                         if isinstance(policy_dt, str):
                             policy_dt = datetime.datetime.fromisoformat(policy_dt.replace('Z', ''))
-                        
+
                         days_diff = (incident_dt - policy_dt).days
                         if days_diff < 3:
                             risk_score += 35
@@ -41,9 +40,11 @@ class FraudService:
         vehicle_reg = claim_data.get('accident_vehicle_reg')
         if vehicle_reg and vehicle_reg.strip():
             reg_clean = vehicle_reg.strip().upper()
-            past_reg_claims = db.claims.count_documents({
-                "accident_vehicle_reg": reg_clean
-            })
+            past_reg_claims = db.session.execute(
+                db.select(db.func.count(Claim.id)).where(
+                    Claim.accident_vehicle_reg == reg_clean
+                )
+            ).scalar()
             if past_reg_claims >= 2:
                 risk_score += 30
                 risk_flags.append(f"Vehicle registration '{reg_clean}' has {past_reg_claims} prior claim submissions.")
@@ -55,9 +56,11 @@ class FraudService:
         driver_license = claim_data.get('driver_license_number')
         if driver_license and driver_license.strip():
             license_clean = driver_license.strip().upper()
-            past_driver_claims = db.claims.count_documents({
-                "driver_license_number": license_clean
-            })
+            past_driver_claims = db.session.execute(
+                db.select(db.func.count(Claim.id)).where(
+                    Claim.driver_license_number == license_clean
+                )
+            ).scalar()
             if past_driver_claims >= 2:
                 risk_score += 25
                 risk_flags.append(f"Driver license '{license_clean}' has {past_driver_claims} prior claim submissions.")
@@ -80,9 +83,14 @@ class FraudService:
             for proof in proof_files:
                 file_hash = proof.get('file_hash')
                 if file_hash:
-                    dup_claim = db.claims.find_one({"proof_files.file_hash": file_hash})
+                    # Check if any claim has this file hash in their proof_files
+                    # This is tricky with JSONB - for simplicity we'll do a basic check
+                    # In a real implementation, we'd need to parse the JSONB field
+                    dup_claim = db.session.execute(
+                        db.select(Claim).where(Claim.proof_files.contains([{'file_hash': file_hash}]))
+                    ).scalar_one_or_none()
                     if dup_claim:
-                        dup_num = dup_claim.get('claim_number', 'Unknown')
+                        dup_num = dup_claim.claim_number
                         risk_score += 50
                         risk_flags.append(f"File '{proof.get('original_filename')}' matches identical file hash previously uploaded in Claim #{dup_num}.")
 
