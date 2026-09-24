@@ -1,3 +1,9 @@
+> **⚠ SUPERSEDED (2026-09-24):** Truehost shared hosting blocks ALL outbound
+> database connections (verified: ports 3306/5432/27017 BLOCKED, only 80/443
+> open; support confirmed no external DBs and no MongoDB on shared plans).
+> **Use `docs/deployment-oracle.md` instead.** This file is kept as a record of
+> the attempt; the app never went live on Truehost.
+
 # Deploying POLICYGUARD to Truehost (Shared cPanel Hosting)
 
 This app runs on **Flask + MongoDB + a background SMS scheduler**. Shared
@@ -152,13 +158,42 @@ from `seed_policy_types.py` and the admin UI.
 - [ ] Uploads dir writable: `~/policyguard/uploads/claims` (claims attachments)
 - [ ] **Never** commit the real `.env`; it lives only on the server
 
+## 9. Verifying Atlas connectivity from the server (run this FIRST)
+
+`ServerSelectionTimeoutError: No replica set members found yet` never says
+*which* network layer failed, and each layer has a different owner (you,
+Truehost, or Atlas). The repo ships a layered diagnostic that pinpoints it:
+
+```bash
+cd ~/policyguard
+~/virtualenv/policyguard/<pyver>/bin/python scripts/diagnose_atlas.py
+```
+
+It checks, in order: venv deps → `MONGO_URI` config → HTTPS egress **and
+prints the server's public IP** (the one Atlas must whitelist) → DNS (SRV +
+A records) → raw TCP to port 27017 → TLS handshake → real pymongo `ping`.
+The first `FAIL` is the layer to fix; the verdict at the bottom tells you
+the exact next action. Non-destructive; masks the URI password in output.
+
+Interpretation shortcuts learned from real deployments:
+
+| Diagnostic result | Meaning | Owner |
+|---|---|---|
+| LAYER 4 `Name or service not known` | Host resolver broken for `*.mongodb.net` | Truehost |
+| LAYER 5 TCP **timeout** (not refused) on all shards | Egress firewall silently dropping outbound 27017 — classic shared-hosting block | Truehost (ticket: "allow outbound TCP 27017 to *.mongodb.net") |
+| LAYER 5–6 PASS, LAYER 7 ping fails | Server egress IP missing from Atlas Network Access (or bad credentials) | You (Atlas console) |
+| All PASS but the web app still 500s | Passenger worker has a different `MONGO_URI` than the shell — check the cPanel env vars, then Restart | You |
+
 ## Troubleshooting
 
 | Symptom | Fix |
 |---|---|
 | 500 on every page | Check Passenger error log in Setup Python App UI; usually missing env var or dep |
+| `ModuleNotFoundError: No module named '...'` in stderr | Dependencies were never fully installed into the app virtualenv. Run `~/virtualenv/policyguard/<pyver>/bin/pip install -r requirements.txt` from the app root, then Restart. Do NOT install one package at a time — that is how version drift happens |
+| `RecursionError` / stderr shows `imp.load_source('wsgi', 'passenger_wsgi.py')` repeating | cPanel generated a shim `passenger_wsgi.py` that imports *itself* (happens when the generated file and the startup file share a name). Replace it with the repo's `passenger_wsgi.py`; in Setup Python App set startup file = `passenger_wsgi.py`, entry point = `application` |
 | `ConfigError: SECRET_KEY...` | Set a 32+ char random `SECRET_KEY` (this is intentional fail-fast) |
-| Mongo timeouts | Atlas Network Access — whitelist the server IP or `0.0.0.0/0` |
+| Mongo timeouts | Run `scripts/diagnose_atlas.py` (section 9) — then Atlas Network Access and/or a Truehost egress ticket, depending on the failing layer |
+| `.htaccess` PassengerPython path doesn't match the running Python | The app was recreated in cPanel with a different Python version. Keep ONE registration; delete stale virtualenvs; Restart after any change. The `Passenger*` block in `.htaccess` is cPanel-managed — never hand-edit it |
 | No SMS going out | Cron not running / wrong virtualenv path; check `sms-tick.log` |
 | M-Pesa not confirming | Callbacks need public HTTPS; confirm URL registration in Daraja |
 | Staff locked out with "Too many sign-in attempts" | Raise `LOGIN_RATE_LIMIT`, or clear the limiter counters (`policy_guard.counters` / `.windows` collections) |

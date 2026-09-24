@@ -1,6 +1,19 @@
 import os
-from flask import Flask, request
+import sys
+
 from dotenv import load_dotenv
+
+# Must run BEFORE `from .config import ...`: Config class attributes are bound
+# from os.environ at import time, so calling load_dotenv() only inside
+# create_app() is too late and .env values (MONGO_URI, SECRET_KEY, ...) would
+# silently fall back to the class defaults.
+# Skipped under pytest: the development .env carries live-ish integration
+# settings (MPESA_ENV, rate limits, callback allowlists, ...) that must not
+# leak into the test app and break test hermeticity.
+if 'pytest' not in sys.modules:
+    load_dotenv()
+
+from flask import Flask, request
 
 from .config import config_by_name
 from .extensions import init_db, login_manager, limiter

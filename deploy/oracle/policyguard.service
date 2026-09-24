@@ -1,0 +1,27 @@
+# Install to /etc/systemd/system/policyguard.service (setup.sh does this).
+# PolicyGuard Flask app served by gunicorn; nginx proxies 80/443 → 127.0.0.1:8000.
+[Unit]
+Description=PolicyGuard (Flask + gunicorn)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=policyguard
+Group=policyguard
+WorkingDirectory=/srv/policyguard
+# Secrets come from /srv/policyguard/.env: app/__init__.py calls load_dotenv()
+# before config is read, so no EnvironmentFile= here — that also avoids systemd
+# parsing quirks if a password ever contains '#'.
+ExecStart=/srv/policyguard/venv/bin/gunicorn \
+    --workers 3 \
+    --bind 127.0.0.1:8000 \
+    --timeout 60 \
+    --access-logfile - \
+    --error-logfile - \
+    run:app
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
